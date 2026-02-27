@@ -1,0 +1,6 @@
+/family-memory-frontend/node_modules/
+/family-memory-frontend/dist/
+/.claude/
+/family-memory-frontend/.claude/
+/upload/
+/family-memory-backend/target/

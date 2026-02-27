@@ -1,0 +1,543 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ==================== 颜色变量 ==================== */
+:root {
+  --peach-main: #FF8A80;
+  --peach-light: #FFF0EE;
+  --love-orange: #FFAB91;
+  --family-blue: #64B5F6;
+  --vault-gold: #FFD54F;
+  --timeline-green: #81C784;
+  --bg-main: #FFF9F8;
+  --text-primary: #4A403A;
+}
+
+/* ==================== 字体 ==================== */
+/* 标题字体：使用 Tailwind 的 serif 字体栈 */
+.font-serif-title {
+  font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  font-weight: 700;
+}
+
+/* ==================== 基础样式 ==================== */
+body {
+  background-color: var(--bg-main);
+  font-family: 'system-ui', '-apple-system', sans-serif;
+  color: var(--text-primary);
+}
+
+/* ==================== 毛玻璃卡片 ==================== */
+.glass-card {
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 8px 32px 0 rgba(255, 138, 128, 0.1);
+}
+
+/* ==================== 头部渐变背景 ==================== */
+.header-bg {
+  background: linear-gradient(135deg, #FF8A80 0%, #FFAB91 100%);
+  border-radius: 0 0 40px 40px;
+  transition: all 0.5s ease;
+}
+
+/* 头部渐变淡出效果 - 无圆角 */
+.header-bg-fade {
+  background: linear-gradient(
+    180deg,
+    #FF8A80 0%,
+    #FF9A8C 30%,
+    #FFAB91 50%,
+    #FFD4C4 75%,
+    #FFF0EE 90%,
+    #FFF9F8 100%
+  );
+  transition: all 0.5s ease;
+}
+
+/* ==================== 动画 ==================== */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.4s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+.slide-up-enter-active,
+.slide-up-leave-active {
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease;
+}
+.slide-up-enter-from,
+.slide-up-leave-to {
+  transform: translateY(30px);
+  opacity: 0;
+}
+
+/* 心跳动画 */
+@keyframes heart-beat {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+.heart-active {
+  animation: heart-beat 0.6s ease-in-out;
+}
+
+/* 导航高亮指示器 */
+.nav-active-glow {
+  position: relative;
+}
+.nav-active-glow::after {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 12px currentColor;
+}
+
+/* ==================== 滚动条隐藏 ==================== */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* ==================== 安全区域 ==================== */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 20px);
+}
+
+/* ==================== 文本截断 ==================== */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ==================== 渐变按钮 ==================== */
+.btn-gradient {
+  background: linear-gradient(135deg, #FF8A80 0%, #FFAB91 100%);
+}
+
+.btn-gradient:active {
+  transform: scale(0.95);
+}
+
+/* ==================== 阴影 ==================== */
+.shadow-peach {
+  box-shadow: 0 10px 40px -10px rgba(255, 138, 128, 0.4);
+}
+
+/* ==================== 装饰动画 ==================== */
+/* 浮动动画 - 慢速 */
+@keyframes float-slow {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 0.5;
+  }
+  50% {
+    transform: translateY(-12px) rotate(5deg);
+    opacity: 0.7;
+  }
+}
+.animate-float-slow {
+  animation: float-slow 6s ease-in-out infinite;
+}
+
+/* 浮动动画 - 中速 */
+@keyframes float-medium {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 0.4;
+  }
+  50% {
+    transform: translateY(-8px) rotate(-5deg);
+    opacity: 0.6;
+  }
+}
+.animate-float-medium {
+  animation: float-medium 4s ease-in-out infinite;
+}
+
+/* 浮动动画 - 快速 */
+@keyframes float-fast {
+  0%, 100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  50% {
+    transform: translateY(-6px);
+    opacity: 0.55;
+  }
+}
+.animate-float-fast {
+  animation: float-fast 3s ease-in-out infinite;
+}
+
+/* 闪烁动画 */
+@keyframes twinkle {
+  0%, 100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.2);
+  }
+}
+.animate-twinkle {
+  animation: twinkle 3s ease-in-out infinite;
+}
+.animate-twinkle-delay {
+  animation: twinkle 3s ease-in-out infinite 1.5s;
+}
+
+/* 气泡上升动画 */
+@keyframes bubble {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+    opacity: 0.35;
+  }
+  50% {
+    transform: translateY(-15px) scale(1.1);
+    opacity: 0.55;
+  }
+}
+.animate-bubble {
+  animation: bubble 5s ease-in-out infinite;
+}
+.animate-bubble-delay {
+  animation: bubble 5s ease-in-out infinite 2s;
+}
+.animate-bubble-slow {
+  animation: bubble 7s ease-in-out infinite 1s;
+}
+
+/* ==================== 拍立得剪贴簿风格 ==================== */
+/* 拍立得卡片基础样式 */
+.polaroid-card {
+  position: relative;
+  background: #fff;
+  padding: 8px 8px 40px 8px;
+  border-radius: 4px;
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.08),
+    0 2px 4px rgba(0, 0, 0, 0.04);
+  cursor: pointer;
+  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.polaroid-card:hover {
+  transform: rotate(0deg) translateY(-8px) !important;
+  box-shadow:
+    0 16px 32px rgba(0, 0, 0, 0.12),
+    0 4px 8px rgba(0, 0, 0, 0.06);
+  z-index: 10;
+}
+
+/* 照片区域 */
+.polaroid-photo {
+  position: relative;
+  overflow: hidden;
+  border-radius: 2px;
+  background: #f5f5f4;
+}
+
+.polaroid-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.5s ease;
+}
+
+.polaroid-card:hover .polaroid-photo img {
+  transform: scale(1.05);
+}
+
+/* 底部文字区 */
+.polaroid-caption {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 8px 10px;
+  text-align: center;
+}
+
+.polaroid-caption h3 {
+  font-size: 12px;
+  font-weight: 600;
+  color: #44403c;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  word-break: break-all;
+}
+
+.polaroid-caption .meta {
+  font-size: 10px;
+  color: #a8a29e;
+  margin-top: 2px;
+}
+
+/* 年份标签 */
+.years-ago-tag {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  padding: 4px 10px;
+  background: linear-gradient(135deg, #FF8A80 0%, #FFAB91 100%);
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 20px;
+  box-shadow: 0 2px 8px rgba(255, 138, 128, 0.4);
+  z-index: 5;
+}
+
+/* 图片数量标签 */
+.photo-count-tag {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  color: white;
+  font-size: 10px;
+  border-radius: 12px;
+  z-index: 5;
+}
+
+/* 装饰胶带 */
+.tape-decoration {
+  position: absolute;
+  width: 50px;
+  height: 18px;
+  background: rgba(255, 171, 145, 0.7);
+  transform: rotate(-8deg);
+  z-index: 6;
+  opacity: 0.85;
+}
+
+.tape-decoration::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent,
+    transparent 2px,
+    rgba(255, 255, 255, 0.15) 2px,
+    rgba(255, 255, 255, 0.15) 4px
+  );
+}
+
+.tape-top-left {
+  top: -6px;
+  left: 10px;
+  transform: rotate(-15deg);
+}
+
+.tape-top-right {
+  top: -6px;
+  right: 10px;
+  transform: rotate(12deg);
+}
+
+.tape-bottom-center {
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%) rotate(-3deg);
+}
+
+/* 无图片卡片样式 */
+.polaroid-no-image {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: linear-gradient(135deg, #FFF5F3 0%, #FFF0EE 100%);
+}
+
+.polaroid-no-image .icon-placeholder {
+  color: #FF8A80;
+  opacity: 0.3;
+  margin-bottom: 8px;
+}
+
+.polaroid-no-image p {
+  font-size: 11px;
+  color: #78716c;
+  text-align: center;
+  padding: 0 8px;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-all;
+}
+
+/* ==================== 布局模式 ==================== */
+/* 容器 */
+.fragments-container {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 220px;
+  padding: 20px 10px;
+}
+
+/* 单条记忆 - 居中大卡片 */
+.fragments-single {
+  justify-content: center;
+}
+
+.fragments-single .polaroid-card {
+  width: 200px;
+  animation: gentle-float 4s ease-in-out infinite;
+}
+
+.fragments-single .polaroid-photo {
+  height: 140px;
+}
+
+/* 双条记忆 - 左右并排 */
+.fragments-double {
+  gap: 20px;
+}
+
+.fragments-double .polaroid-card {
+  width: 160px;
+}
+
+.fragments-double .polaroid-photo {
+  height: 110px;
+}
+
+.fragments-double .fragment-0 {
+  transform: rotate(-4deg);
+  animation: polaroid-enter 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.fragments-double .fragment-1 {
+  transform: rotate(5deg);
+  animation: polaroid-enter 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.1s forwards;
+}
+
+/* 三条记忆 - 主卡片+次卡片堆叠 */
+.fragments-triple {
+  gap: 16px;
+}
+
+.fragments-triple .fragment-main {
+  width: 180px;
+  transform: rotate(-3deg);
+  animation: polaroid-enter 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.fragments-triple .fragment-main .polaroid-photo {
+  height: 130px;
+}
+
+.fragments-triple .fragment-main::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 6px;
+  box-shadow: 0 0 20px rgba(255, 138, 128, 0.2);
+  animation: shadow-pulse 3s ease-in-out infinite;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.fragments-triple .stacked-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.fragments-triple .fragment-sub {
+  width: 130px;
+}
+
+.fragments-triple .fragment-sub .polaroid-photo {
+  height: 85px;
+}
+
+.fragments-triple .fragment-sub .polaroid-card {
+  padding-bottom: 32px;
+}
+
+.fragments-triple .fragment-sub .polaroid-caption h3 {
+  font-size: 11px;
+}
+
+.fragments-triple .fragment-1 {
+  transform: rotate(4deg);
+  animation: polaroid-enter 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.1s forwards;
+}
+
+.fragments-triple .fragment-2 {
+  transform: rotate(-2deg);
+  animation: polaroid-enter 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s forwards;
+}
+
+/* ==================== 动画关键帧 ==================== */
+/* 入场动画 */
+@keyframes polaroid-enter {
+  from {
+    opacity: 0;
+    transform: translateY(30px) rotate(0deg) scale(0.9);
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* 轻柔浮动动画 */
+@keyframes gentle-float {
+  0%, 100% {
+    transform: translateY(0) rotate(-2deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(2deg);
+  }
+}
+
+/* 阴影脉冲动画 */
+@keyframes shadow-pulse {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(255, 138, 128, 0.15);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(255, 138, 128, 0.25);
+  }
+}
+
