@@ -4,3 +4,6 @@
 /family-memory-frontend/.claude/
 /upload/
 /family-memory-backend/target/
+/.umadev/repomap-cache/signature.txt
+/.umadev/repomap-cache/symbols.json
+/.umadev/input-history.txt

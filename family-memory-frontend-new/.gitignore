@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.env.local
+.playwright-cli/
+/family_memory_ui_redesign_珍藏与家人.html
+/family_memory_ui_redesign_时光轴.html
+/family_memory_ui_redesign.html
+/output/

@@ -1,0 +1,37 @@
+server:
+  port: ${SERVER_PORT:5200}
+  servlet:
+    context-path: /api/v1
+
+spring:
+  application:
+    name: family-memory-backend-new
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${DB_URL:jdbc:mysql://192.168.20.69:3306/family_memory_new?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=true}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:sunsharing_DDK}
+  servlet:
+    multipart:
+      max-file-size: 30MB
+      max-request-size: 120MB
+  jackson:
+    time-zone: Asia/Shanghai
+    date-format: yyyy-MM-dd HH:mm:ss
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:family-memory-new-a-secure-secret-key-at-least-32-bytes}
+    expiration-hours: ${JWT_EXPIRATION_HOURS:168}
+  upload:
+    directory: ${UPLOAD_DIRECTORY:./uploads}
+    public-path: /files
