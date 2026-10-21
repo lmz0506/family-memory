@@ -4,21 +4,26 @@ import {ChevronLeft, ChevronRight, Image, LoaderCircle, Plus, Sun} from 'lucide-
 import {useFamilyStore} from '@/stores/family'
 import {useMemoryStore} from '@/stores/memories'
 import MemoryCard from '@/components/MemoryCard.vue'
+import SegmentedControl from '@/components/SegmentedControl.vue'
+import {notify} from '@/composables/useToast'
 
 const family = useFamilyStore()
 const memories = useMemoryStore()
 const mobilePageSize = 4
 type DisplayMode = 'large' | 'medium' | 'small'
 const displaySettings: Record<DisplayMode, {label: string; columns: number; pageSize: number; gridClass: string}> = {
-  large: {label: '大', columns: 3, pageSize: 6, gridClass: 'md:grid-cols-3'},
-  medium: {label: '中', columns: 4, pageSize: 8, gridClass: 'md:grid-cols-4'},
-  small: {label: '小', columns: 5, pageSize: 10, gridClass: 'md:grid-cols-5'}
+  large: {label: '大', columns: 3, pageSize: 6, gridClass: 'memory-grid-large'},
+  medium: {label: '中', columns: 4, pageSize: 8, gridClass: 'memory-grid-medium'},
+  small: {label: '小', columns: 5, pageSize: 10, gridClass: 'memory-grid-small'}
 }
 const savedDisplayMode = localStorage.getItem('family-memory-home-display')
 const displayMode = ref<DisplayMode>(savedDisplayMode === 'medium' || savedDisplayMode === 'small' ? savedDisplayMode : 'large')
 const page = ref(1)
 const mobilePage = ref(1)
 const loadingMore = ref(false)
+const loadError = ref('')
+const displayOptions = [{value:'large',label:'舒展'}, {value:'medium',label:'标准'}, {value:'small',label:'紧凑'}]
+function openComposer() { window.dispatchEvent(new Event('family-memory-compose')) }
 const loadMoreTrigger = ref<HTMLElement | null>(null)
 const isDesktop = ref(false)
 let mediaQuery: MediaQueryList | undefined
@@ -34,7 +39,9 @@ async function loadFirstPage() {
   if (!family.current) return
   page.value = 1
   mobilePage.value = 1
-  await memories.load(family.current.id, {page: 1, size: isDesktop.value ? desktopPageSize.value : mobilePageSize})
+  loadError.value = ''
+  try { await memories.load(family.current.id, {page: 1, size: isDesktop.value ? desktopPageSize.value : mobilePageSize}) }
+  catch (e) {loadError.value = (e as Error).message}
 }
 
 async function goToPage(target: number) {
@@ -55,10 +62,10 @@ async function changeDisplayMode(mode: string) {
 async function loadMore() {
   if (isDesktop.value || !family.current || !hasMore.value || loadingMore.value) return
   loadingMore.value = true
-  mobilePage.value++
   try {
-    await memories.load(family.current.id, {page: mobilePage.value, size: mobilePageSize}, true)
-  } finally {
+    await memories.load(family.current.id, {page: mobilePage.value + 1, size: mobilePageSize}, true)
+    mobilePage.value++
+  } catch (e) {notify((e as Error).message, 'error'); observer?.disconnect()} finally {
     loadingMore.value = false
   }
 }
@@ -98,51 +105,35 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="w-full space-y-8">
-    <div class="relative overflow-hidden rounded-3xl border border-brand-coral/10 bg-gradient-to-r from-[#fff9f5] via-[#fff3ec] to-[#fdf8f3] p-8 shadow-soft md:p-10">
-      <div class="pointer-events-none absolute -bottom-10 -right-10 h-72 w-72 rounded-full bg-brand-peach/10 blur-3xl"></div>
-      <div class="relative z-10 flex flex-col items-start justify-between gap-6 md:flex-row md:items-center">
-        <div class="max-w-2xl space-y-3">
-          <div class="inline-flex items-center gap-2 rounded-full bg-brand-coral-light px-3 py-1 text-xs font-semibold text-brand-coral">
-            <Sun :size="14"/><span>{{ greeting }}，欢迎回家</span>
-          </div>
-          <h1 class="font-serif text-3xl font-bold leading-tight text-warm-900 md:text-4xl">把日子，一页页留住。</h1>
-          <p class="text-sm leading-relaxed text-warm-500">这里收集家人的照片、故事，也收集每一个普通却珍贵的瞬间。每一个记录，都是献给未来的情书。</p>
-        </div>
-        <div class="flex self-stretch items-center justify-between gap-3 rounded-2xl border border-white/80 bg-white/90 px-5 py-3.5 shadow-soft backdrop-blur-md md:self-auto md:justify-start">
-          <div class="rounded-xl bg-brand-coral-light p-3 text-brand-coral"><Image :size="24"/></div>
-          <div>
-            <div class="flex items-baseline gap-1"><span class="text-2xl font-bold text-warm-900">{{ family.current?.photoCount || 0 }}</span><span class="text-xs text-warm-400">个</span></div>
-            <p class="text-xs font-medium text-warm-500">照片与回忆视频</p>
-          </div>
-        </div>
+  <section class="page-shell page-reveal space-y-6">
+    <header class="home-welcome">
+      <div>
+        <p class="page-eyebrow flex items-center gap-2"><Sun :size="15"/>{{ greeting }} · {{ family.current?.name || '欢迎回家' }}</p>
+        <h1 class="page-title mt-2">把日子，一页页留住。</h1>
+        <p class="mt-2 max-w-xl text-sm leading-7 text-warm-500">照片里的笑，日常里的爱，都在这里慢慢积攒。</p>
       </div>
-    </div>
-
-    <div class="hidden items-center justify-end gap-2 md:flex">
-      <span class="mr-1 text-xs font-medium text-warm-400">卡片显示</span>
-      <div class="flex rounded-xl border border-warm-200 bg-white p-1 shadow-sm" aria-label="首页卡片显示模式">
-        <button v-for="(setting, mode) in displaySettings" :key="mode" type="button"
-                :aria-pressed="displayMode === mode" @click="changeDisplayMode(mode)"
-                class="rounded-lg px-3 py-1.5 text-xs font-semibold transition"
-                :class="displayMode === mode ? 'bg-warm-900 text-white shadow-sm' : 'text-warm-500 hover:bg-warm-50 hover:text-warm-900'">
-          {{ setting.label }}<span class="ml-1 text-[9px] opacity-65">{{ setting.columns }}列</span>
-        </button>
+      <div class="home-welcome-aside">
+        <span class="flex items-center gap-2 text-sm text-warm-500"><Image :size="18" class="text-brand-coral"/><b class="text-lg text-warm-900">{{ family.current?.photoCount || 0 }}</b>个影像瞬间</span>
+        <button @click="openComposer" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-brand-coral px-5 text-sm font-semibold text-white shadow-soft transition hover:-translate-y-0.5 hover:bg-brand-coral-hover active:scale-95"><Plus :size="18"/>记录这一刻</button>
       </div>
+    </header>
+    <div class="flex flex-wrap items-end justify-between gap-3">
+      <div><p class="page-eyebrow">LITTLE MOMENTS, BIG LOVE</p><h2 class="mt-1 font-serif text-xl font-bold text-warm-900">家里的故事 <span class="ml-2 font-sans text-sm font-normal text-warm-500">{{ memories.total }} 段回忆</span></h2></div>
+      <div class="hidden md:block"><SegmentedControl :model-value="displayMode" :options="displayOptions" label="记忆卡片密度" @update:model-value="changeDisplayMode"/></div>
     </div>
-
-    <div v-if="memories.loading && !memories.items.length" class="grid grid-cols-1 gap-6" :class="gridClass">
+    <div v-if="loadError" class="empty-state" role="alert"><p>暂时没能翻开这些记忆</p><p class="text-sm">{{ loadError }}</p><button class="rounded-full bg-warm-900 px-5 py-2.5 text-sm text-white" @click="loadFirstPage">重新加载</button></div>
+    <div v-else-if="memories.loading && !memories.items.length" class="memory-grid" :class="gridClass">
       <div v-for="n in (isDesktop ? desktopPageSize : mobilePageSize)" :key="n" class="h-[440px] animate-pulse rounded-3xl bg-warm-100"></div>
     </div>
 
-    <div v-else-if="memories.items.length" class="grid grid-cols-1 gap-6" :class="gridClass">
+    <div v-else-if="memories.items.length" class="memory-grid" :class="gridClass">
       <MemoryCard v-for="item in memories.items" :key="item.id" :memory="item"/>
     </div>
 
     <div v-else class="rounded-3xl border border-dashed border-warm-300 bg-white/70 px-6 py-16 text-center">
       <div class="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-brand-coral-light text-brand-coral"><Plus :size="20"/></div>
-      <h2 class="mt-4 font-serif text-xl font-bold text-warm-900">这个家还没有记忆</h2>
-      <p class="mt-2 text-xs text-warm-400">从一件今天发生的小事开始吧。</p>
+      <h2 class="mt-4 font-serif text-xl font-bold text-warm-900">从第一段故事开始</h2>
+      <p class="mt-2 text-xs text-warm-400">从一件今天发生的小事开始吧。</p><button @click="openComposer" class="mt-5 rounded-full bg-brand-coral px-5 py-3 text-sm font-semibold text-white">记录第一段记忆</button>
     </div>
 
     <nav v-if="isDesktop && totalPages > 1" class="flex items-center justify-center gap-2" aria-label="首页分页">
@@ -157,3 +148,13 @@ onBeforeUnmount(() => {
     </div>
   </section>
 </template>
+
+<style scoped>
+.home-welcome{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:28px 32px;border:1px solid #efdfd2;border-radius:24px;background:radial-gradient(ellipse at top right,#fbe7d5,transparent 60%),#fffaf5}
+.home-welcome-aside{display:flex;flex-direction:column;align-items:flex-end;gap:14px;flex-shrink:0}
+.memory-grid{display:grid;gap:24px;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr))}
+.memory-grid-medium{grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr))}
+.memory-grid-small{grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr))}
+@media(min-width:1650px){.memory-grid-large{grid-template-columns:repeat(3,minmax(0,1fr))}.memory-grid-medium{grid-template-columns:repeat(4,minmax(0,1fr))}.memory-grid-small{grid-template-columns:repeat(5,minmax(0,1fr))}}
+@media(max-width:767px){.home-welcome{padding:20px;display:block}.home-welcome-aside{margin-top:16px;flex-direction:row;align-items:center;justify-content:space-between;gap:8px}.home-welcome-aside>span{font-size:12px}.home-welcome-aside>button{padding-inline:14px;font-size:13px}.memory-grid{grid-template-columns:minmax(0,1fr);gap:20px}}
+</style>

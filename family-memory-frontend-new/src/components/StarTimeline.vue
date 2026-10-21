@@ -1,873 +1,257 @@
 <script setup lang="ts">
-import {computed, onBeforeUnmount, onMounted, reactive, ref, watch} from 'vue'
-import * as THREE from 'three'
-import {OrbitControls} from 'three/examples/jsm/controls/OrbitControls.js'
-import {ChevronRight, LoaderCircle, MapPin, MousePointer2, RotateCcw, UserRound} from 'lucide-vue-next'
-import {memoryApi} from '@/api'
-import type {Memory, TimelineMemoryStar, TimelineYearSummary} from '@/types'
+import {computed,nextTick,onBeforeUnmount,onMounted,ref,shallowRef,watch} from 'vue'
+import {ArrowLeft,ArrowUpRight,ChevronLeft,ChevronRight,Eye,EyeOff,Home,LoaderCircle,MapPin,Pause,Play,RotateCcw,Search,Sparkles,X,ZoomIn,ZoomOut,PanelRightOpen} from 'lucide-vue-next'
+import {useRouter,useRoute} from 'vue-router'
+import {memoryApi,universeApi} from '@/api'
+import type {Memory,UniverseOverview,UniverseItem,UniversePage,UniverseSourceType} from '@/types'
+import MemoryImage from './MemoryImage.vue'
+import UniverseBreadcrumb from './UniverseBreadcrumb.vue'
+import {useDialog} from '@/composables/useDialog'
+import {UniverseScene,type ProjectedStar} from '@/three/UniverseScene'
+import {UniversePreloader} from '@/three/UniversePreloader'
+import {buildOverviewProgressively,buildContentNodes,itemPathKeys,levelNodes,locationKey,type UniverseLocation,type UniverseNode} from '@/three/memoryUniverse'
+import '@/styles/universe.css'
 
-const props = defineProps<{familyId: number}>()
-type NodeType = 'year' | 'month' | 'day' | 'memory'
-type StarNode = {
-  key: string; type: NodeType; year: number; month?: number; day?: number; memoryId?: number; count: number;
-  parentKey?: string; position: THREE.Vector3; color: THREE.Color; size: number; index: number
-}
+const props=defineProps<{familyId:number;initialKeyword?:string}>(),router=useRouter(),route=useRoute(),PAGE_SIZE=24
+const canvasHost=ref<HTMLElement>(),stage=ref<HTMLElement>(),readerPanel=ref<HTMLElement>()
+const loading=ref(true),overviewReady=ref(false),error=ref('')
+const overview=shallowRef<UniverseOverview>({memoryCount:0,capsuleCount:0,years:[]})
+const nodes=shallowRef<UniverseNode[]>([]),projected=shallowRef<ProjectedStar[]>([])
+const searchPage=shallowRef<UniversePage|null>(null)
+const location=ref<UniverseLocation>({level:'universe'}),hovered=ref<string|null>(null),selectedStar=ref<string|null>(null)
+const paused=ref(false),reduced=ref(false),immersive=ref(false),lowQuality=ref(false),filterOpen=ref(false),navigationOpen=ref(true)
+const keyword=ref(props.initialKeyword||''),mediaType=ref('all'),filtering=ref(false),filterError=ref(''),appliedFilter=ref('')
+const matches=shallowRef<Set<number>|null>(null),matchingKeys=shallowRef<Set<string>|null>(null)
+const monthLoading=ref(false),monthError=ref(''),memoryPage=ref(0)
+const selectedMemoryId=ref<number|null>(null),detailLoading=ref(false),detailError=ref(''),photoIndex=ref(0)
+const detailCache=shallowRef(new Map<number,Memory>())
+const motionQuery=window.matchMedia('(prefers-reduced-motion: reduce)')
+let world:UniverseScene|undefined,destroyed=false,initVersion=0,filterVersion=0,detailVersion=0,appWasInert=false
+let allOverviewNodes:UniverseNode[]=[],stagedKeys=new Set<string>(),initAbort:AbortController|undefined,searchAbort:AbortController|undefined
+let appliedQuery:{keyword:string;sourceType?:UniverseSourceType}={keyword:''}
+let preloader:UniversePreloader|undefined,sceneFrame=0
 
-const host = ref<HTMLElement | null>(null)
-const mountPoint = ref<HTMLElement | null>(null)
-const loading = ref(true)
-const error = ref('')
-const overview = ref<TimelineYearSummary[]>([])
-const memoryIndex = ref<TimelineMemoryStar[]>([])
-const hovered = ref<StarNode | null>(null)
-const pinned = ref<StarNode | null>(null)
-const dismissedMemoryId = ref<number>()
-const detailLoading = ref(false)
-const detailCache = reactive(new Map<number, Memory>())
-const cardX = ref(0)
-const cardY = ref(0)
-const viewportWidth = ref(1)
-const viewportHeight = ref(1)
-const labelPositions = ref<Record<string, {x: number; y: number; visible: boolean}>>({})
-let detailTimer: ReturnType<typeof setTimeout> | undefined
-
-let scene: THREE.Scene | undefined
-let camera: THREE.PerspectiveCamera | undefined
-let renderer: THREE.WebGLRenderer | undefined
-let controls: OrbitControls | undefined
-let dataGroup: THREE.Group | undefined
-let dataPoints: THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial> | undefined
-let connectionLines: THREE.LineSegments<THREE.BufferGeometry, THREE.ShaderMaterial> | undefined
-let connectionGeometry: THREE.BufferGeometry | undefined
-let clusterDust: THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial> | undefined
-let clusterDustGeometry: THREE.BufferGeometry | undefined
-let backgroundPoints: THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial> | undefined
-let backgroundGeometry: THREE.BufferGeometry | undefined
-let dataGeometry: THREE.BufferGeometry | undefined
-let resizeObserver: ResizeObserver | undefined
-let animationFrame = 0
-let timer: THREE.Timer | undefined
-let frameCount = 0
-let pointerDownX = 0
-let pointerDownY = 0
-let pointerDragDistance = 0
-let cameraTween: {
-  startedAt: number; duration: number; fromPosition: THREE.Vector3; toPosition: THREE.Vector3;
-  fromTarget: THREE.Vector3; toTarget: THREE.Vector3
-} | undefined
-const pointer = new THREE.Vector2(9, 9)
-const pointerTarget = new THREE.Vector2()
-const nodes: StarNode[] = []
-const nodeByKey = new Map<string, StarNode>()
-const yearCenters = new Map<number, THREE.Vector3>()
-let baseCameraZ = 78
-
-const effectiveNode = computed(() => hovered.value || pinned.value)
-const activeMemoryId = computed(() => effectiveNode.value?.type === 'memory' ? effectiveNode.value.memoryId : undefined)
-const cardMemory = computed(() => {
-  const id = activeMemoryId.value
-  return id && id !== dismissedMemoryId.value ? detailCache.get(id) : undefined
+const memoryTotal=computed(()=>overview.value.memoryCount),capsuleTotal=computed(()=>overview.value.capsuleCount),total=computed(()=>memoryTotal.value+capsuleTotal.value)
+const currentKey=computed(()=>locationKey(location.value)),candidates=computed(()=>levelNodes(nodes.value,location.value))
+const breadcrumb=computed(()=>{const v=location.value,path:Array<{label:string;location:UniverseLocation}>=[{label:'全景',location:{level:'universe'}}];if(v.year)path.push({label:`${v.year}年`,location:{level:'year',year:v.year}});if(v.month)path.push({label:`${v.month}月`,location:{level:'month',year:v.year,month:v.month}});if(v.day)path.push({label:`${v.day}日`,location:{...v}});return path})
+const visibleLabels=computed(()=>projected.value.filter(item=>item.visible&&item.node.count&&isMatch(item.node)))
+const nodeMap=computed(()=>new Map(nodes.value.map(node=>[node.key,node])))
+const contextLabelKeys=computed(()=>{const keys=new Set<string>();for(const key of [hovered.value,selectedStar.value]){let node=key?nodeMap.value.get(key):undefined;const seen=new Set<string>();while(node&&!seen.has(node.key)){seen.add(node.key);if(node.kind!=='memory'&&node.kind!=='capsule')keys.add(node.key);node=node.parent?nodeMap.value.get(node.parent):undefined}}return keys})
+const datePlacements=computed(()=>{
+ const placements=new Map<string,{left:string;top:string}>(),occupied:Array<{x:number;y:number;w:number;h:number}>=[]
+ const width=stage.value?.clientWidth||375,height=stage.value?.clientHeight||600
+ for(const item of visibleLabels.value.filter(item=>contextLabelKeys.value.has(item.node.key))){const w=dateLabel(item.node).length*13+10,h=24;let best={dx:0,dy:13,score:Infinity,rect:{x:0,y:0,w,h}}
+  for(const [dx,dy] of [[0,13],[0,-30],[40,5],[-40,5],[0,38],[0,-54]]){const x=Math.max(5,Math.min(width-w-5,item.x+dx!-w/2)),y=Math.max(8,Math.min(height-h-8,item.y+dy!)),rect={x,y,w,h},collision=occupied.some(b=>x<b.x+b.w+3&&x+w+3>b.x&&y<b.y+b.h+3&&y+h+3>b.y),score=(collision?1000:0)+Math.abs(dx!)+Math.abs(dy!-13);if(score<best.score)best={dx:x+w/2-item.x,dy:y-item.y,score,rect}}
+  occupied.push(best.rect);placements.set(item.node.key,{left:`calc(50% + ${best.dx}px)`,top:`calc(50% + ${best.dy}px)`})
+ }return placements
 })
-const breadcrumb = computed(() => {
-  const node = pinned.value
-  if (!node) return []
-  const result = [`${node.year}`]
-  if (node.type !== 'year') result.push(`${node.month}月`)
-  if (node.type === 'day' || node.type === 'memory') result.push(`${node.day}日`)
-  if (node.type === 'memory') result.push('一段记忆')
-  return result
-})
-const cardStyle = computed(() => {
-  const horizontal = cardX.value > viewportWidth.value * .68 ? '-108%' : cardX.value < viewportWidth.value * .32 ? '8%' : '-50%'
-  const vertical = cardY.value > viewportHeight.value * .66 ? '-106%' : cardY.value < viewportHeight.value * .34 ? '8%' : '-50%'
-  return {left: `${cardX.value}px`, top: `${cardY.value}px`, transform: `translate(${horizontal}, ${vertical})`}
-})
+const hoveredMemoryNode=computed(()=>visibleLabels.value.find(item=>item.node.key===hovered.value&&(item.node.kind==='memory'||item.node.kind==='capsule')))
+const memoryPreviewStyle=computed(()=>{const item=hoveredMemoryNode.value;return {left:`${Math.max(12,Math.min((stage.value?.clientWidth||375)-240,(item?.x||0)-105))}px`,top:`${Math.max(175,Math.min((stage.value?.clientHeight||600)-125,(item?.y||0)>310?(item?.y||0)-125:(item?.y||0)+40))}px`}})
+const selectedLeaf=computed(()=>nodes.value.find(node=>node.memoryId===selectedMemoryId.value&&node.kind==='memory'))
+const readerNode=computed(()=>selectedLeaf.value)
+const dayNodes=computed(()=>nodes.value.filter(node=>node.kind==='memory'&&node.year===selectedLeaf.value?.year&&node.month===selectedLeaf.value?.month&&node.day===selectedLeaf.value?.day))
+const reading=computed(()=>selectedMemoryId.value!==null),memory=computed(()=>selectedMemoryId.value===null?undefined:detailCache.value.get(selectedMemoryId.value))
+const media=computed(()=>Array.from(new Set([...(memory.value?.mediaUrls||[]),memory.value?.coverUrl].filter((value):value is string=>Boolean(value)))))
+const chosenIndex=computed(()=>dayNodes.value.findIndex(node=>node.memoryId===selectedMemoryId.value)),readerChoices=computed(()=>dayNodes.value.slice(Math.floor(Math.max(0,chosenIndex.value)/8)*8,Math.floor(Math.max(0,chosenIndex.value)/8)*8+8))
+const matchingCandidates=computed(()=>candidates.value.filter(node=>node.count&&isMatch(node)))
+const railNodes=computed(()=>location.value.level==='day'?matchingCandidates.value.slice(memoryPage.value*PAGE_SIZE,(memoryPage.value+1)*PAGE_SIZE):matchingCandidates.value)
+const memoryPages=computed(()=>location.value.level==='day'?Math.ceil(matchingCandidates.value.length/PAGE_SIZE):0)
+const levelTitle=computed(()=>({universe:'选择年份，走近一片记忆',year:`${location.value.year}年 · 选择月份`,month:`${location.value.year}年${location.value.month}月 · 选择日期`,day:`${location.value.month}月${location.value.day}日 · 共${nodeMap.value.get(currentKey.value)?.count||0}项内容`})[location.value.level])
+const searchPages=computed(()=>Math.ceil((searchPage.value?.total||0)/PAGE_SIZE))
+function isMatch(node:UniverseNode){return matches.value===null||Boolean(matchingKeys.value?.has(node.key))||node.ids.some(id=>matches.value!.has(id))}
+function dateLabel(node:UniverseNode){return node.kind==='year'?`${node.year}年`:node.kind==='month'?`${node.month}月`:`${node.day}日`}
+function contentCountLabel(node:UniverseNode){return [node.memoryCount?`${node.memoryCount}段记忆`:'',node.capsuleCount?`${node.capsuleCount}份珍藏`:''].filter(Boolean).join('、')||'暂无内容'}
+function label(node:UniverseNode){return node.kind==='year'?`${node.year}`:node.kind==='month'?`${node.month}月`:node.kind==='day'?`${node.day}日`:node.title||(node.kind==='capsule'?'一份珍藏':'一段记忆')}
+function accessibleLabel(node:UniverseNode){return node.kind==='year'?`探索${node.year}年，${contentCountLabel(node)}`:node.kind==='month'?`探索${node.month}月，${contentCountLabel(node)}`:node.kind==='day'?`打开${node.month}月${node.day}日，${contentCountLabel(node)}`:node.kind==='capsule'?`查看珍藏：${label(node)}`:`阅读记忆：${label(node)}`}
+function isVideo(url:string){return /\.(mp4|webm|ogg|mov|m4v)(?:$|[?#])/i.test(url)}
+function thumbnail(node:UniverseNode){const item=detailCache.value.get(node.memoryId!);const url=item?.coverUrl||item?.mediaUrls?.[0];return url&&!isVideo(url)?url:''}
+function hideBrokenThumbnail(event:Event){(event.target as HTMLImageElement).style.display='none'}
+function closeReader(){const id=selectedMemoryId.value;selectedMemoryId.value=null;detailVersion++;detailLoading.value=false;detailError.value='';if(id!==null)nextTick(()=>stage.value?.querySelector<HTMLButtonElement>(`[data-node-key="memory:${id}"]`)?.focus())}
+useDialog(reading,readerPanel,closeReader)
+watch(reading,value=>world?.setReading(value));watch(selectedMemoryId,value=>world?.selectMemory(value));watch(paused,value=>world?.setPaused(value));watch(lowQuality,value=>world?.setLowQuality(value));watch(hovered,value=>{world?.highlight(value);const node=value?nodeMap.value.get(value):undefined;if(node)preloader?.prioritize(node.year)})
+function closeNavigation(){navigationOpen.value=false;nextTick(()=>stage.value?.querySelector<HTMLButtonElement>('[data-navigation-toggle]')?.focus())}
+function toggleNavigation(){navigationOpen.value=!navigationOpen.value}
+function toggleFilter(){filterOpen.value=!filterOpen.value}
+function clearStarSelection(){hovered.value=null;selectedStar.value=null;world?.clearSelection()}
+function focusStar(event:FocusEvent,key:string){if((event.target as HTMLElement).matches(':focus-visible')){world?.holdHover();hovered.value=key}}
+function hoverAt(event:PointerEvent,node:UniverseNode){world?.requestHover(world.nodeAt(event)?.key||node.key)}
+function activateAt(event:MouseEvent,node:UniverseNode){void activate(event.detail?world?.nodeAt(event)||node:node)}
+watch(()=>props.initialKeyword,value=>{keyword.value=value||'';if(overviewReady.value){if(value?.trim())void applyFilters();else if(matches.value)clearFilters()}})
+watch(immersive,async value=>{const app=document.getElementById('app');if(!value){if(app)app.inert=appWasInert;return}appWasInert=Boolean(app?.inert);await nextTick();if(!immersive.value||destroyed)return;if(app)app.inert=true;stage.value?.querySelector<HTMLButtonElement>('.immersive-exit')?.focus()})
 
-function hash(value: string) {
-  let result = 2166136261
-  for (let index = 0; index < value.length; index++) {
-    result ^= value.charCodeAt(index)
-    result = Math.imul(result, 16777619)
-  }
-  return result >>> 0
+/** 将后台已缓存星点加入固定概要布局，切换日期不会删除其他星点。 */
+function syncScene(){
+ const items=new Map<number,UniverseItem>(preloader?.items)
+ for(const item of searchPage.value?.items||[])items.set(item.indexId,item)
+ const leafItems=[...items.values()],paths=itemPathKeys(leafItems)
+ for(const key of paths)stagedKeys.add(key)
+ const base=allOverviewNodes.filter(node=>stagedKeys.has(node.key))
+ nodes.value=[...base,...buildContentNodes(leafItems,allOverviewNodes)]
+ world?.setNodes(nodes.value);world?.setMatches(matches.value,matchingKeys.value)
 }
-function seeded(seed: number) {
-  let value = seed
-  return () => {
-    value += 0x6D2B79F5
-    let next = value
-    next = Math.imul(next ^ next >>> 15, next | 1)
-    next ^= next + Math.imul(next ^ next >>> 7, next | 61)
-    return ((next ^ next >>> 14) >>> 0) / 4294967296
-  }
+/** 合并同一帧的数据补入，不移动镜头。 */
+function scheduleScene(){if(sceneFrame||destroyed)return;sceneFrame=requestAnimationFrame(()=>{sceneFrame=0;if(!destroyed){syncScene();updateLoadingState()}})}
+function updateLoadingState(){
+ const year=location.value.year
+ monthError.value=year?preloader?.errorFor(year)||'':''
+ const day=nodeMap.value.get(currentKey.value),loaded=location.value.level==='day'?levelNodes(nodes.value,location.value).length:0
+ monthLoading.value=Boolean(location.value.level==='day'&&year&&!preloader?.isComplete(year)&&!monthError.value&&loaded<(day?.count||0))
 }
-function randomDirection(rng: () => number) {
-  const theta = rng() * Math.PI * 2
-  const z = rng() * 2 - 1
-  const radius = Math.sqrt(1 - z * z)
-  return new THREE.Vector3(radius * Math.cos(theta), radius * Math.sin(theta), z)
+async function initialize(){
+ const version=++initVersion;initAbort?.abort();initAbort=new AbortController();loading.value=true;overviewReady.value=false;error.value=''
+ preloader?.dispose();preloader=undefined;cancelAnimationFrame(sceneFrame);sceneFrame=0
+ world?.dispose();world=undefined;nodes.value=[];allOverviewNodes=[];stagedKeys=new Set()
+ await nextTick();if(!canvasHost.value||destroyed)return
+ try{
+  world=new UniverseScene(canvasHost.value,[],{project:value=>projected.value=value,hover:value=>hovered.value=value,pick:node=>{void activate(node)},blank:clearStarSelection,failed:()=>error.value='图形渲染暂时中断，请重新打开星海。'})
+  world.setReduced(reduced.value);world.setPaused(paused.value);world.setLowQuality(lowQuality.value)
+  const response=await universeApi.overview(props.familyId,initAbort.signal)
+  if(destroyed||version!==initVersion)return
+  overview.value=response;overviewReady.value=true;let framed=false
+  await buildOverviewProgressively(response,(batch,all)=>{
+   allOverviewNodes=all;for(const node of batch)stagedKeys.add(node.key)
+   syncScene()
+   if(!framed){world?.setOverviewBounds(all);world?.setLevel(levelNodes(nodes.value,{level:'universe'}),undefined,!world?.hasUserGesture());framed=true}
+  },()=>destroyed||version!==initVersion)
+  if(destroyed||version!==initVersion)return
+  preloader=new UniversePreloader((year,afterId,signal)=>universeApi.year(props.familyId,year,afterId,120,signal),()=>{if(version===initVersion)scheduleScene()})
+  preloader.start(response.years.map(item=>item.year))
+  if(location.value.year)preloader.prioritize(location.value.year)
+  if(props.initialKeyword?.trim() && version===initVersion && !destroyed){keyword.value=props.initialKeyword;await applyFilters()}
+ }catch(e){if(!destroyed&&version===initVersion)error.value=(e as Error).message}
+ finally{if(version===initVersion)loading.value=false}
 }
-
-const naturalPalette = [
-  0xb7cfff, 0xd8e2ff, 0xf4f7ff, 0xfff4dc, 0xffddb0, 0xffbca9, 0xe9c6ff, 0xbfe1dc, 0xffd1c7
-]
-function starColor(key: string) {
-  const rng = seeded(hash(`color-${key}`))
-  const first = new THREE.Color(naturalPalette[Math.floor(rng() * naturalPalette.length)])
-  const second = new THREE.Color(naturalPalette[Math.floor(rng() * naturalPalette.length)])
-  return first.lerp(second, .15 + rng() * .45).multiplyScalar(.9 + rng() * .22)
+async function navigate(next:UniverseLocation,select=false){
+ closeReader();filterOpen.value=false;hovered.value=null;location.value=next;memoryPage.value=0
+ if(next.year)preloader?.prioritize(next.year)
+ syncScene();updateLoadingState()
+ const target=nodeMap.value.get(locationKey(next));selectedStar.value=select?target?.key||null:null
+ world?.setLevel(levelNodes(nodes.value,next),target);world?.setMatches(matches.value,matchingKeys.value);if(select&&target)world?.selectNode(target.key)
 }
-
-function buildNodes() {
-  nodes.length = 0
-  nodeByKey.clear()
-  yearCenters.clear()
-  const yearPositions = new Map<number, THREE.Vector3>()
-  const monthPositions = new Map<string, THREE.Vector3>()
-  const dayPositions = new Map<string, THREE.Vector3>()
-  const yearCount = overview.value.length
-
-  overview.value.forEach((summary, yearOrder) => {
-    const rng = seeded(hash(`year-position-${summary.year}`))
-    const angle = yearOrder * 2.399963 + rng() * .32
-    const radial = yearCount <= 1 || yearOrder === 0 ? 0 : 68 * Math.sqrt(yearOrder)
-    const position = new THREE.Vector3(
-      Math.cos(angle) * radial,
-      Math.sin(angle) * radial * .68,
-      yearCount <= 1 ? 0 : (rng() - .5) * 18
-    )
-    yearPositions.set(summary.year, position)
-    yearCenters.set(summary.year, position)
-    nodes.push({
-      key: `year-${summary.year}`, type: 'year', year: summary.year, count: summary.count, position,
-      color: starColor(`year-${summary.year}`), size: Math.min(39, 28 + Math.log2(summary.count + 1) * 2.2), index: -1
-    })
-
-    const monthCounts = new Map(summary.months.map(month => [month.month, month.count]))
-    const armOffset = rng() * Math.PI * 2
-    const diskRatio = .58 + rng() * .12
-    for (let month = 1; month <= 12; month++) {
-      const monthRng = seeded(hash(`month-position-${summary.year}-${month}`))
-      const spiralAngle = armOffset + month * 1.12 + (month % 2) * Math.PI
-      const spiralRadius = 10 + month * 1.42 + monthRng() * 2.8
-      const offset = new THREE.Vector3(
-        Math.cos(spiralAngle) * spiralRadius,
-        Math.sin(spiralAngle) * spiralRadius * diskRatio,
-        Math.sin(spiralAngle * .55) * 4.5 + (monthRng() - .5) * 5
-      )
-      const monthPosition = position.clone().add(offset)
-      monthPositions.set(`${summary.year}-${month}`, monthPosition)
-      const count = monthCounts.get(month) || 0
-      nodes.push({
-        key: `month-${summary.year}-${month}`, type: 'month', year: summary.year, month, count,
-        parentKey: `year-${summary.year}`,
-        position: monthPosition, color: starColor(`month-${summary.year}-${month}`),
-        size: count ? Math.min(23, 15 + Math.log2(count + 1) * 1.7) : 8.5, index: -1
-      })
-    }
-  })
-
-  const memoriesByDay = new Map<string, TimelineMemoryStar[]>()
-  for (const memory of memoryIndex.value) {
-    const day = memory.day || 1
-    const key = `${memory.year}-${memory.month}-${day}`
-    const list = memoriesByDay.get(key) || []
-    list.push(memory)
-    memoriesByDay.set(key, list)
-  }
-
-  for (const [key, memories] of memoriesByDay) {
-    const sample = memories[0]
-    if (!sample) continue
-    const day = sample.day || 1
-    const parent = monthPositions.get(`${sample.year}-${sample.month}`)
-    if (!parent) continue
-    const rng = seeded(hash(`day-position-${key}`))
-    const position = parent.clone().add(randomDirection(rng).multiplyScalar(5.5 + rng() * 7.5))
-    dayPositions.set(key, position)
-    nodes.push({
-      key: `day-${key}`, type: 'day', year: sample.year, month: sample.month, day,
-      count: memories.length, parentKey: `month-${sample.year}-${sample.month}`, position,
-      color: starColor(`day-${key}`), size: Math.min(18, 11 + Math.log2(memories.length + 1) * 1.55), index: -1
-    })
-  }
-
-  for (const memory of memoryIndex.value) {
-    const day = memory.day || 1
-    const dayKey = `${memory.year}-${memory.month}-${day}`
-    const parent = dayPositions.get(dayKey) || monthPositions.get(`${memory.year}-${memory.month}`) || yearPositions.get(memory.year)
-    if (!parent) continue
-    const rng = seeded(hash(`memory-position-${memory.id}`))
-    const distance = 2.4 + rng() * 5.2
-    const position = parent.clone().add(randomDirection(rng).multiplyScalar(distance))
-    nodes.push({
-      key: `memory-${memory.id}`, type: 'memory', year: memory.year, month: memory.month, day,
-      parentKey: `day-${dayKey}`,
-      memoryId: memory.id, count: memory.weight, position, color: starColor(`memory-${memory.id}`),
-      size: Math.min(13, 7.5 + Math.log2(memory.weight + 2) * .95), index: -1
-    })
-  }
-  nodes.forEach((node, index) => {
-    node.index = index
-    nodeByKey.set(node.key, node)
-  })
+function changeDayPage(index:number){if(index>=0&&index<memoryPages.value)memoryPage.value=index}
+async function activate(node:UniverseNode){
+ if(!node.count||!isMatch(node))return
+ if(node.kind==='capsule'){await router.push({path:`/capsules/${node.capsuleId}`,query:{from:'universe'}});return}
+ if(node.kind==='memory'){if(node.memoryId)await openMemory(node.memoryId);return}
+ await navigate({level:node.kind,year:node.year,month:node.month,day:node.day},true)
 }
-
-function createBackground() {
-  if (!scene) return
-  const rng = seeded(20260811)
-  const count = 6800
-  const positions = new Float32Array(count * 3)
-  const colors = new Float32Array(count * 3)
-  const sizes = new Float32Array(count)
-  const opacities = new Float32Array(count)
-  const phases = new Float32Array(count)
-  const speeds = new Float32Array(count)
-  for (let index = 0; index < count; index++) {
-    const radius = 430 + rng() * 340
-    const direction = randomDirection(rng)
-    positions.set([direction.x * radius, direction.y * radius, direction.z * radius], index * 3)
-    const color = starColor(`background-${index}`).multiplyScalar(.74 + rng() * .4)
-    colors.set([color.r, color.g, color.b], index * 3)
-    const bright = rng() > .91
-    sizes[index] = bright ? 3.3 + rng() * 2.8 : 1.25 + rng() * 2.3
-    opacities[index] = bright ? .76 + rng() * .22 : .38 + rng() * .34
-    phases[index] = rng() * Math.PI * 2
-    speeds[index] = .12 + rng() * .42
-  }
-  backgroundGeometry = new THREE.BufferGeometry()
-  backgroundGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-  backgroundGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3))
-  backgroundGeometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1))
-  backgroundGeometry.setAttribute('aOpacity', new THREE.BufferAttribute(opacities, 1))
-  backgroundGeometry.setAttribute('aPhase', new THREE.BufferAttribute(phases, 1))
-  backgroundGeometry.setAttribute('aSpeed', new THREE.BufferAttribute(speeds, 1))
-  const material = new THREE.ShaderMaterial({
-    uniforms: {uTime: {value: 0}, uPixelRatio: {value: Math.min(window.devicePixelRatio, 2)}},
-    vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-    vertexShader: `
-      attribute float aSize; attribute float aOpacity; attribute float aPhase; attribute float aSpeed;
-      varying vec3 vColor; varying float vOpacity;
-      uniform float uTime; uniform float uPixelRatio;
-      void main(){
-        vColor=color;
-        vOpacity=aOpacity*(.88+sin(uTime*aSpeed+aPhase)*.12);
-        vec4 mvPosition=modelViewMatrix*vec4(position,1.0);
-        gl_PointSize=max((.85+aSize*.38)*uPixelRatio,aSize*uPixelRatio*230.0/max(70.0,-mvPosition.z));
-        gl_Position=projectionMatrix*mvPosition;
-      }`,
-    fragmentShader: `
-      varying vec3 vColor; varying float vOpacity;
-      void main(){
-        float d=distance(gl_PointCoord,vec2(.5)); if(d>.5) discard;
-        float halo=smoothstep(.5,.08,d); float core=smoothstep(.14,0.0,d);
-        float alpha=(halo*.52+core*.96)*vOpacity;
-        gl_FragColor=vec4(vColor*(.86+core*.5),alpha);
-      }`
-  })
-  backgroundPoints = new THREE.Points(backgroundGeometry, material)
-  backgroundPoints.frustumCulled = false
-  scene.add(backgroundPoints)
+function back(){if(reading.value){closeReader();return}const v=location.value;void navigate(v.level==='day'?{level:'month',year:v.year,month:v.month}:v.level==='month'?{level:'year',year:v.year}:{level:'universe'})}
+async function openMemory(id:number){
+ const version=++detailVersion;selectedStar.value=`memory:${id}`;selectedMemoryId.value=id;photoIndex.value=0;detailError.value='';detailLoading.value=!detailCache.value.has(id)
+ if(!detailLoading.value)return
+ try{const item=await memoryApi.detail(id);if(!destroyed){const cache=new Map(detailCache.value);cache.set(id,item);if(cache.size>64)cache.delete(cache.keys().next().value!);detailCache.value=cache}}
+ catch(e){if(version===detailVersion)detailError.value=(e as Error).message}
+ finally{if(version===detailVersion)detailLoading.value=false}
 }
-
-function createClusterDust() {
-  if (!dataGroup || !overview.value.length) return
-  const perYear = Math.max(150, Math.min(380, Math.floor(4200 / overview.value.length)))
-  const count = perYear * overview.value.length
-  const positions = new Float32Array(count * 3)
-  const colors = new Float32Array(count * 3)
-  const sizes = new Float32Array(count)
-  const phases = new Float32Array(count)
-  let index = 0
-  for (const summary of overview.value) {
-    const center = yearCenters.get(summary.year)
-    if (!center) continue
-    const rng = seeded(hash(`galaxy-dust-${summary.year}`))
-    const rotation = rng() * Math.PI * 2
-    const diskRatio = .52 + rng() * .17
-    const baseColor = starColor(`year-${summary.year}`)
-    for (let point = 0; point < perYear; point++, index++) {
-      const radius = Math.pow(rng(), .58) * 35
-      const arm = point % 3
-      const angle = rotation + arm * Math.PI * 2 / 3 + radius * .2 + (rng() - .5) * (1.25 - radius / 45)
-      const softness = 1.3 + rng() * 2.5
-      positions.set([
-        center.x + Math.cos(angle) * radius + (rng() - .5) * softness,
-        center.y + Math.sin(angle) * radius * diskRatio + (rng() - .5) * softness,
-        center.z + (rng() - .5) * (7 - radius * .12)
-      ], index * 3)
-      const color = baseColor.clone().lerp(starColor(`dust-${summary.year}-${point}`), .36).multiplyScalar(.42 + rng() * .35)
-      colors.set([color.r, color.g, color.b], index * 3)
-      sizes[index] = .85 + rng() * (rng() > .93 ? 3.5 : 1.9)
-      phases[index] = rng() * Math.PI * 2
-    }
-  }
-  clusterDustGeometry = new THREE.BufferGeometry()
-  clusterDustGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-  clusterDustGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3))
-  clusterDustGeometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1))
-  clusterDustGeometry.setAttribute('aPhase', new THREE.BufferAttribute(phases, 1))
-  const material = new THREE.ShaderMaterial({
-    uniforms: {uTime: {value: 0}, uPixelRatio: {value: Math.min(window.devicePixelRatio, 2)}},
-    vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-    vertexShader: `
-      attribute float aSize; attribute float aPhase; varying vec3 vColor; varying float vAlpha;
-      uniform float uTime; uniform float uPixelRatio;
-      void main(){
-        vColor=color; vAlpha=.38+sin(uTime*.22+aPhase)*.09;
-        vec4 mvPosition=modelViewMatrix*vec4(position,1.0);
-        gl_PointSize=max(1.0,aSize*uPixelRatio*145.0/max(65.0,-mvPosition.z));
-        gl_Position=projectionMatrix*mvPosition;
-      }`,
-    fragmentShader: `
-      varying vec3 vColor; varying float vAlpha;
-      void main(){
-        float d=distance(gl_PointCoord,vec2(.5)); if(d>.5) discard;
-        float alpha=smoothstep(.5,.05,d)*vAlpha;
-        gl_FragColor=vec4(vColor,alpha);
-      }`
-  })
-  clusterDust = new THREE.Points(clusterDustGeometry, material)
-  clusterDust.renderOrder = -2
-  dataGroup.add(clusterDust)
+function stepMemory(delta:number){const items=dayNodes.value;if(!items.length)return;const node=items[(chosenIndex.value+delta+items.length)%items.length];if(node?.memoryId)void openMemory(node.memoryId)}
+function shiftPhoto(delta:number){if(media.value.length)photoIndex.value=(photoIndex.value+delta+media.value.length)%media.value.length}
+function updateMotion(){reduced.value=motionQuery.matches;world?.setReduced(reduced.value);if(reduced.value)paused.value=true}
+function toggleImmersive(){closeReader();filterOpen.value=false;immersive.value=!immersive.value}
+function keydown(event:KeyboardEvent){if(immersive.value&&event.key==='Tab'){event.preventDefault();stage.value?.querySelector<HTMLButtonElement>('.immersive-exit')?.focus();return}if(event.key==='Escape'){if(reading.value)return;if(filterOpen.value){filterOpen.value=false;return}if(immersive.value){immersive.value=false;return}if(navigationOpen.value){closeNavigation();return}if(location.value.level!=='universe')back()}}
+async function applyFilters(){if(!overviewReady.value){filterError.value='时间概要仍在加载，请稍后重试';return}if(!keyword.value.trim()&&mediaType.value==='all'){clearFilters();return}appliedQuery={keyword:keyword.value.trim(),sourceType:mediaType.value==='all'?undefined:mediaType.value==='capsule'?'CAPSULE':'MEMORY'};await loadSearch(1)}
+async function loadSearch(page:number){
+ const version=++filterVersion;searchAbort?.abort();searchAbort=new AbortController();filtering.value=true;filterError.value=''
+ try{
+  const response=await universeApi.search(props.familyId,appliedQuery.keyword,appliedQuery.sourceType,page,PAGE_SIZE,searchAbort.signal)
+  if(version!==filterVersion||destroyed)return
+  searchPage.value=response;matches.value=new Set(response.items.map(item=>item.indexId));matchingKeys.value=itemPathKeys(response.items);appliedFilter.value=[appliedQuery.keyword,appliedQuery.sourceType==='CAPSULE'?'珍藏':appliedQuery.sourceType==='MEMORY'?'记忆':''].filter(Boolean).join(' · ')
+  await navigate({level:'universe'});if(version!==filterVersion||destroyed)return
+  selectedStar.value=response.items.length===1?`${response.items[0]!.sourceType==='MEMORY'?'memory':'capsule'}:${response.items[0]!.sourceId}`:null
+  world?.focusMatches(matches.value!,matchingKeys.value);filterOpen.value=false
+ }catch(e){if(version===filterVersion&&!destroyed)filterError.value=(e as Error).message}
+ finally{if(version===filterVersion)filtering.value=false}
 }
-
-function createDataStars() {
-  if (!scene) return
-  buildNodes()
-  updateCameraFit(true)
-  const count = nodes.length
-  const positions = new Float32Array(count * 3)
-  const colors = new Float32Array(count * 3)
-  const sizes = new Float32Array(count)
-  const opacities = new Float32Array(count)
-  const phases = new Float32Array(count)
-  const speeds = new Float32Array(count)
-  const emphasis = new Float32Array(count)
-  nodes.forEach((node, index) => {
-    positions.set(node.position.toArray(), index * 3)
-    colors.set([node.color.r, node.color.g, node.color.b], index * 3)
-    sizes[index] = node.size
-    opacities[index] = baselineOpacity(node)
-    const rng = seeded(hash(`animation-${node.key}`))
-    phases[index] = rng() * Math.PI * 2
-    speeds[index] = .32 + rng() * .8
-    emphasis[index] = dataEmphasis(node)
-  })
-  dataGeometry = new THREE.BufferGeometry()
-  dataGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-  dataGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3))
-  dataGeometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1))
-  dataGeometry.setAttribute('aOpacity', new THREE.BufferAttribute(opacities, 1))
-  dataGeometry.setAttribute('aPhase', new THREE.BufferAttribute(phases, 1))
-  dataGeometry.setAttribute('aSpeed', new THREE.BufferAttribute(speeds, 1))
-  dataGeometry.setAttribute('aEmphasis', new THREE.BufferAttribute(emphasis, 1))
-  const material = new THREE.ShaderMaterial({
-    uniforms: {uTime: {value: 0}, uPixelRatio: {value: Math.min(window.devicePixelRatio, 2)}},
-    vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-    vertexShader: `
-      attribute float aSize; attribute float aOpacity; attribute float aPhase; attribute float aSpeed; attribute float aEmphasis;
-      varying vec3 vColor; varying float vOpacity;
-      uniform float uTime; uniform float uPixelRatio;
-      void main(){
-        vColor=color; float twinkle=1.0+sin(uTime*aSpeed+aPhase)*0.075;
-        vOpacity=aOpacity; vec4 mvPosition=modelViewMatrix*vec4(position,1.0);
-        float perspective=70.0/max(28.0,-mvPosition.z);
-        gl_PointSize=max(2.0,aSize*(1.0+aEmphasis*.48)*twinkle*uPixelRatio*perspective);
-        gl_Position=projectionMatrix*mvPosition;
-      }`,
-    fragmentShader: `
-      varying vec3 vColor; varying float vOpacity;
-      void main(){
-        float d=distance(gl_PointCoord,vec2(.5)); if(d>.5) discard;
-        float halo=smoothstep(.5,.08,d); float core=smoothstep(.16,0.0,d);
-        float alpha=(halo*.42+core*.92)*vOpacity;
-        gl_FragColor=vec4(vColor*(1.0+core*.42),alpha);
-      }`
-  })
-  dataPoints = new THREE.Points(dataGeometry, material)
-  dataGroup = new THREE.Group()
-  createClusterDust()
-  dataGroup.add(dataPoints)
-  connectionGeometry = new THREE.BufferGeometry()
-  connectionGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(0), 3))
-  connectionGeometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(0), 3))
-  connectionGeometry.setAttribute('aProgress', new THREE.BufferAttribute(new Float32Array(0), 1))
-  connectionGeometry.setAttribute('aPhase', new THREE.BufferAttribute(new Float32Array(0), 1))
-  connectionLines = new THREE.LineSegments(connectionGeometry, new THREE.ShaderMaterial({
-    uniforms: {uTime: {value: 0}}, vertexColors: true, transparent: true, depthWrite: false,
-    blending: THREE.AdditiveBlending,
-    vertexShader: `
-      attribute float aProgress; attribute float aPhase;
-      varying vec3 vColor; varying float vProgress; varying float vPhase;
-      void main(){
-        vColor=color; vProgress=aProgress; vPhase=aPhase;
-        gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);
-      }`,
-    fragmentShader: `
-      uniform float uTime; varying vec3 vColor; varying float vProgress; varying float vPhase;
-      void main(){
-        float travel=fract(uTime*.075+vPhase);
-        float gap=abs(vProgress-travel); gap=min(gap,1.0-gap);
-        float pulse=smoothstep(.2,0.0,gap);
-        gl_FragColor=vec4(vColor*(.8+pulse*.7),.12+pulse*.48);
-      }`
-  }))
-  connectionLines.renderOrder = -1
-  dataGroup.add(connectionLines)
-  scene.add(dataGroup)
-  updateVisualState()
-}
-
-function baselineOpacity(node: StarNode) {
-  if (node.type === 'year') return .98
-  if (node.type === 'month') return node.count > 0 ? .82 : .24
-  return node.type === 'day' ? .76 : .66
-}
-function dataEmphasis(node: StarNode) {
-  if (!node.count || node.type === 'year') return 0
-  return node.type === 'day' ? .2 : .13
-}
-function ancestorsOf(node: StarNode) {
-  const result: StarNode[] = []
-  let current = node.parentKey ? nodeByKey.get(node.parentKey) : undefined
-  while (current) {
-    result.push(current)
-    current = current.parentKey ? nodeByKey.get(current.parentKey) : undefined
-  }
-  return result
-}
-function relatesTo(active: StarNode, node: StarNode) {
-  if (node.key === active.key || ancestorsOf(active).some(item => item.key === node.key)) return true
-  return ancestorsOf(node).some(item => item.key === active.key)
-}
-function updateConnectionLines() {
-  if (!connectionGeometry) return
-  const active = effectiveNode.value
-  const edges = new Map<string, [StarNode, StarNode]>()
-  const addEdge = (child: StarNode) => {
-    const parent = child.parentKey ? nodeByKey.get(child.parentKey) : undefined
-    if (parent) edges.set(`${parent.key}:${child.key}`, [parent, child])
-  }
-  const childrenByParent = new Map<string, StarNode[]>()
-  for (const node of nodes) {
-    if (!node.parentKey) continue
-    const children = childrenByParent.get(node.parentKey) || []
-    children.push(node)
-    childrenByParent.set(node.parentKey, children)
-  }
-  const addDescendantEdges = (parentKey: string) => {
-    for (const child of childrenByParent.get(parentKey) || []) {
-      addEdge(child)
-      addDescendantEdges(child.key)
-    }
-  }
-  if (active) {
-    addEdge(active)
-    ancestorsOf(active).forEach(addEdge)
-    addDescendantEdges(active.key)
-  }
-  const segments = 20
-  const positions = new Float32Array(edges.size * segments * 6)
-  const colors = new Float32Array(edges.size * segments * 6)
-  const progresses = new Float32Array(edges.size * segments * 2)
-  const phases = new Float32Array(edges.size * segments * 2)
-  let vertexOffset = 0
-  for (const [parent, child] of edges.values()) {
-    const rng = seeded(hash(`connection-${parent.key}-${child.key}`))
-    const direction = child.position.clone().sub(parent.position)
-    const swirlRng = seeded(hash(`swirl-${parent.year}`))
-    const swirlSign = swirlRng() > .5 ? 1 : -1
-    const bend = new THREE.Vector3(-direction.y, direction.x, 0)
-    if (bend.lengthSq() > 0) {
-      const ratio = parent.type === 'year' ? .24 + rng() * .1 : .1 + rng() * .1
-      bend.normalize().multiplyScalar(Math.min(parent.type === 'year' ? 8 : 4.5, direction.length() * ratio) * swirlSign)
-      bend.z = (rng() - .5) * direction.length() * .12
-    }
-    const control = parent.position.clone().lerp(child.position, .5).add(bend)
-    const curve = new THREE.QuadraticBezierCurve3(parent.position, control, child.position)
-    const phase = rng()
-    for (let segment = 0; segment < segments; segment++) {
-      const startT = segment / segments
-      const endT = (segment + 1) / segments
-      const start = curve.getPoint(startT)
-      const end = curve.getPoint(endT)
-      const startColor = parent.color.clone().lerp(child.color, startT)
-      const endColor = parent.color.clone().lerp(child.color, endT)
-      positions.set(start.toArray(), vertexOffset * 3)
-      positions.set(end.toArray(), (vertexOffset + 1) * 3)
-      colors.set([startColor.r, startColor.g, startColor.b], vertexOffset * 3)
-      colors.set([endColor.r, endColor.g, endColor.b], (vertexOffset + 1) * 3)
-      progresses.set([startT, endT], vertexOffset)
-      phases.set([phase, phase], vertexOffset)
-      vertexOffset += 2
-    }
-  }
-  connectionGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-  connectionGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3))
-  connectionGeometry.setAttribute('aProgress', new THREE.BufferAttribute(progresses, 1))
-  connectionGeometry.setAttribute('aPhase', new THREE.BufferAttribute(phases, 1))
-  connectionGeometry.boundingSphere = edges.size ? null : new THREE.Sphere(new THREE.Vector3(), 0)
-  if (edges.size) connectionGeometry.computeBoundingSphere()
-}
-function updateVisualState() {
-  if (!dataGeometry) return
-  const opacity = dataGeometry.getAttribute('aOpacity') as THREE.BufferAttribute
-  const emphasis = dataGeometry.getAttribute('aEmphasis') as THREE.BufferAttribute
-  const active = effectiveNode.value
-  nodes.forEach((node, index) => {
-    let alpha = baselineOpacity(node)
-    let glow = dataEmphasis(node)
-    if (active) {
-      const related = relatesTo(active, node)
-      alpha = related ? Math.max(alpha, node.key === active.key ? 1 : .84) : Math.max(.1, alpha * .28)
-      glow = node.key === active.key ? 1 : related ? Math.max(glow, .42) : glow * .28
-    }
-    opacity.setX(index, alpha)
-    emphasis.setX(index, glow)
-  })
-  opacity.needsUpdate = true
-  emphasis.needsUpdate = true
-  updateConnectionLines()
-}
-
-async function loadMemoryDetail(id: number) {
-  if (detailCache.has(id)) return
-  detailLoading.value = true
-  try { detailCache.set(id, await memoryApi.detail(id)) }
-  catch (exception) { error.value = (exception as Error).message }
-  finally { detailLoading.value = false }
-}
-function scheduleMemoryDetail(node: StarNode | null, immediate = false) {
-  clearTimeout(detailTimer)
-  if (!node?.memoryId) return
-  detailTimer = setTimeout(() => loadMemoryDetail(node.memoryId!), immediate ? 0 : 150)
-}
-
-function pickNode(event: PointerEvent) {
-  if (!renderer || !camera || !dataPoints) return null
-  const rect = renderer.domElement.getBoundingClientRect()
-  const x = event.clientX - rect.left
-  const y = event.clientY - rect.top
-  pointer.x = (x / rect.width) * 2 - 1
-  pointer.y = -(y / rect.height) * 2 + 1
-  pointerTarget.set(pointer.x, pointer.y)
-  let selected: StarNode | null = null
-  let bestScore = Number.POSITIVE_INFINITY
-  for (const node of nodes) {
-    const projected = projectNode(node)
-    if (!projected.visible) continue
-    const radius = node.type === 'year' ? 30 : node.type === 'month' ? (node.count ? 23 : 17) : node.type === 'day' ? 20 : 18
-    const score = Math.hypot(projected.x - x, projected.y - y) / radius
-    if (score <= 1 && score < bestScore) {
-      bestScore = score
-      selected = node
-    }
-  }
-  return selected
-}
-function handlePointerDown(event: PointerEvent) {
-  pointerDownX = event.clientX
-  pointerDownY = event.clientY
-  pointerDragDistance = 0
-}
-function handlePointerMove(event: PointerEvent) {
-  if (event.buttons) {
-    pointerDragDistance = Math.max(pointerDragDistance, Math.hypot(event.clientX - pointerDownX, event.clientY - pointerDownY))
-    if (hovered.value) {
-      hovered.value = null
-      updateVisualState()
-    }
-    return
-  }
-  const node = pickNode(event)
-  if (hovered.value?.key === node?.key) return
-  hovered.value = node
-  scheduleMemoryDetail(node)
-  updateVisualState()
-  if (renderer) renderer.domElement.style.cursor = node ? 'pointer' : 'grab'
-}
-function handlePointerLeave() {
-  hovered.value = null
-  pointerTarget.set(0, 0)
-  updateVisualState()
-}
-function handleClick(event: PointerEvent) {
-  if (pointerDragDistance > 5) {
-    pointerDragDistance = 0
-    return
-  }
-  const node = pickNode(event)
-  if (!node) {
-    if (pinned.value?.memoryId) dismissedMemoryId.value = pinned.value.memoryId
-    return
-  }
-  const cancelling = pinned.value?.key === node.key
-  pinned.value = cancelling ? null : node
-  dismissedMemoryId.value = undefined
-  scheduleMemoryDetail(pinned.value, true)
-  focusCamera(pinned.value)
-  updateVisualState()
-}
-function focusCamera(node: StarNode | null) {
-  if (!camera || !controls) return
-  const target = node ? node.position.clone().applyMatrix4(dataGroup?.matrixWorld || new THREE.Matrix4()) : new THREE.Vector3()
-  const direction = camera.position.clone().sub(controls.target)
-  if (direction.lengthSq() < .001) direction.set(0, 0, 1)
-  direction.normalize()
-  const distance = !node ? baseCameraZ : node.type === 'year' ? 88 : node.type === 'month' ? 72 : node.type === 'day' ? 58 : 52
-  cameraTween = {
-    startedAt: performance.now(), duration: 850,
-    fromPosition: camera.position.clone(), toPosition: target.clone().add(direction.multiplyScalar(distance)),
-    fromTarget: controls.target.clone(), toTarget: target
-  }
-}
-function reset() { pinned.value = null; hovered.value = null; dismissedMemoryId.value = undefined; focusCamera(null); updateVisualState() }
-function handleKey(event: KeyboardEvent) { if (event.key === 'Escape') reset() }
-
-function projectNode(node: StarNode) {
-  if (!camera || !dataGroup) return {x: 0, y: 0, visible: false}
-  const point = node.position.clone().applyMatrix4(dataGroup.matrixWorld).project(camera)
-  return {
-    x: (point.x * .5 + .5) * viewportWidth.value,
-    y: (-point.y * .5 + .5) * viewportHeight.value,
-    visible: point.z > -1 && point.z < 1 && Math.abs(point.x) < 1.08 && Math.abs(point.y) < 1.08
-  }
-}
-function updateOverlays() {
-  const positions: Record<string, {x: number; y: number; visible: boolean}> = {}
-  for (const node of nodes) {
-    if (node.type !== 'memory') positions[node.key] = projectNode(node)
-  }
-  const active = effectiveNode.value
-  if (active && active.type !== 'year') positions[active.key] = projectNode(active)
-  labelPositions.value = positions
-  if (active?.type === 'memory') {
-    const projected = projectNode(active)
-    cardX.value = projected.x
-    cardY.value = projected.y
-  }
-}
-
-function labelOpacity(node: StarNode) {
-  const active = effectiveNode.value
-  if (!active) return node.type === 'year' ? .9 : 0
-  if (node.key === active.key) return 1
-  if (relatesTo(active, node)) return node.count > 0 ? .78 : .38
-  return node.type === 'year' ? .34 : node.count > 0 ? .2 : .1
-}
-function showLabel(node: StarNode) {
-  if (node.type === 'year') return true
-  const active = effectiveNode.value
-  if (!active) return false
-  if (node.type === 'month') {
-    return (active.type === 'year' && active.year === node.year) ||
-      (active.year === node.year && active.month === node.month)
-  }
-  if (node.type === 'day') {
-    return active.year === node.year && active.month === node.month &&
-      (active.type === 'month' || active.day === node.day)
-  }
-  return false
-}
-
-function updateCameraFit(applyImmediately = false) {
-  if (!camera) return
-  if (overview.value.length <= 1) {
-    baseCameraZ = 78
-  } else {
-    const rect = host.value?.getBoundingClientRect()
-    const aspect = rect ? rect.width / Math.max(rect.height, 1) : 1
-    let extent = 0
-    for (const center of yearCenters.values()) {
-      extent = Math.max(extent, Math.abs(center.x) / Math.max(aspect, 1), Math.abs(center.y))
-    }
-    baseCameraZ = Math.max(118, (extent + 40) / Math.tan(THREE.MathUtils.degToRad(camera.fov * .5)) * 1.08)
-  }
-  if (controls) controls.maxDistance = Math.max(260, baseCameraZ * 2.2)
-  if (applyImmediately && !pinned.value) camera.position.z = baseCameraZ
-}
-
-function setupThree() {
-  if (!mountPoint.value || !host.value) return
-  scene = new THREE.Scene()
-  camera = new THREE.PerspectiveCamera(48, 1, .1, 1600)
-  camera.position.set(0, 0, 78)
-  renderer = new THREE.WebGLRenderer({antialias: true, alpha: true, powerPreference: 'high-performance'})
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-  renderer.outputColorSpace = THREE.SRGBColorSpace
-  renderer.toneMapping = THREE.ACESFilmicToneMapping
-  renderer.toneMappingExposure = 1.05
-  renderer.domElement.className = 'absolute inset-0 h-full w-full touch-none'
-  mountPoint.value.appendChild(renderer.domElement)
-  controls = new OrbitControls(camera, renderer.domElement)
-  controls.enableDamping = true
-  controls.dampingFactor = .055
-  controls.enablePan = true
-  controls.screenSpacePanning = true
-  controls.panSpeed = .72
-  controls.rotateSpeed = .42
-  controls.zoomSpeed = .75
-  controls.minDistance = 18
-  controls.maxDistance = 420
-  controls.target.set(0, 0, 0)
-  renderer.domElement.addEventListener('pointerdown', handlePointerDown)
-  renderer.domElement.addEventListener('pointermove', handlePointerMove)
-  renderer.domElement.addEventListener('pointerleave', handlePointerLeave)
-  renderer.domElement.addEventListener('click', handleClick)
-  createBackground()
-  createDataStars()
-  timer = new THREE.Timer()
-  resizeObserver = new ResizeObserver(resize)
-  resizeObserver.observe(host.value)
-  resize()
-  render()
-}
-function resize() {
-  if (!host.value || !renderer || !camera) return
-  const {width, height} = host.value.getBoundingClientRect()
-  viewportWidth.value = width
-  viewportHeight.value = height
-  camera.aspect = width / Math.max(height, 1)
-  camera.updateProjectionMatrix()
-  updateCameraFit(false)
-  renderer.setSize(width, height, false)
-}
-function render() {
-  if (!renderer || !scene || !camera || !timer) return
-  timer.update()
-  const elapsed = timer.getElapsed()
-  if (cameraTween && controls) {
-    const progress = Math.min(1, (performance.now() - cameraTween.startedAt) / cameraTween.duration)
-    const eased = 1 - Math.pow(1 - progress, 3)
-    camera.position.lerpVectors(cameraTween.fromPosition, cameraTween.toPosition, eased)
-    controls.target.lerpVectors(cameraTween.fromTarget, cameraTween.toTarget, eased)
-    if (progress >= 1) cameraTween = undefined
-  }
-  controls?.update()
-  if (backgroundPoints) {
-    backgroundPoints.rotation.y = elapsed * .0035
-    backgroundPoints.rotation.x = Math.sin(elapsed * .05) * .012
-    backgroundPoints.position.z = Math.sin(elapsed * .055) * 1.8
-    backgroundPoints.material.uniforms.uTime.value = elapsed
-  }
-  if (dataPoints) dataPoints.material.uniforms.uTime.value = elapsed
-  if (clusterDust) clusterDust.material.uniforms.uTime.value = elapsed
-  if (connectionLines) connectionLines.material.uniforms.uTime.value = elapsed
-  renderer.render(scene, camera)
-  if (++frameCount % 3 === 0) updateOverlays()
-  animationFrame = requestAnimationFrame(render)
-}
-
-function mediaUrl(memory: Memory) { return memory.coverUrl || memory.mediaUrls?.[0] || '' }
-function isVideo(url: string) { return /\.(mp4|webm|ogg|mov|m4v)(?:$|[?#])/i.test(url) }
-
-watch(effectiveNode, () => updateVisualState())
-
-onMounted(async () => {
-  try {
-    [overview.value, memoryIndex.value] = await Promise.all([
-      memoryApi.timeline(props.familyId), memoryApi.timelineStars(props.familyId)
-    ])
-    setupThree()
-  } catch (exception) {
-    error.value = (exception as Error).message
-  } finally {
-    loading.value = false
-  }
-  document.addEventListener('keydown', handleKey)
-})
-
-onBeforeUnmount(() => {
-  clearTimeout(detailTimer)
-  cancelAnimationFrame(animationFrame)
-  resizeObserver?.disconnect()
-  document.removeEventListener('keydown', handleKey)
-  if (renderer) {
-    renderer.domElement.removeEventListener('pointerdown', handlePointerDown)
-    renderer.domElement.removeEventListener('pointermove', handlePointerMove)
-    renderer.domElement.removeEventListener('pointerleave', handlePointerLeave)
-    renderer.domElement.removeEventListener('click', handleClick)
-    renderer.dispose()
-    renderer.domElement.remove()
-  }
-  controls?.dispose()
-  dataGeometry?.dispose()
-  dataPoints?.material.dispose()
-  connectionGeometry?.dispose()
-  connectionLines?.material.dispose()
-  clusterDustGeometry?.dispose()
-  clusterDust?.material.dispose()
-  if (backgroundPoints) {
-    backgroundGeometry?.dispose()
-    backgroundPoints.material.dispose()
-  }
-})
+function refocusSearch(){if(matches.value)world?.focusMatches(matches.value,matchingKeys.value)}
+function clearFilters(){if(route.query.keyword)void router.replace({query:{...route.query,keyword:undefined}});filterVersion++;searchAbort?.abort();searchPage.value=null;matches.value=null;matchingKeys.value=null;keyword.value='';mediaType.value='all';filtering.value=false;filterError.value='';appliedFilter.value='';selectedStar.value=null;hovered.value=null;world?.setMatches(null);void navigate({...location.value})}
+function retryMonth(){if(location.value.year){preloader?.prioritize(location.value.year,true);updateLoadingState()}}
+onMounted(()=>{lowQuality.value=window.innerWidth<768;updateMotion();motionQuery.addEventListener('change',updateMotion);document.addEventListener('keydown',keydown);void initialize()})
+onBeforeUnmount(()=>{destroyed=true;initVersion++;filterVersion++;detailVersion++;initAbort?.abort();searchAbort?.abort();preloader?.dispose();cancelAnimationFrame(sceneFrame);if(immersive.value){const app=document.getElementById('app');if(app)app.inert=appWasInert}motionQuery.removeEventListener('change',updateMotion);document.removeEventListener('keydown',keydown);world?.dispose()})
 </script>
 
 <template>
-  <div ref="host" class="cosmos relative min-h-[calc(100vh-72px)] w-full overflow-hidden">
-    <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_34%_28%,#1b2140_0%,#0c1127_42%,#060916_100%)]"></div>
-    <div class="pointer-events-none absolute inset-0 opacity-45 bg-[radial-gradient(ellipse_at_70%_70%,rgba(91,60,105,.24),transparent_48%),radial-gradient(ellipse_at_25%_55%,rgba(65,83,120,.18),transparent_42%)]"></div>
-    <div class="cosmic-veil"></div>
-    <div class="nebula nebula-one"></div>
-    <div class="nebula nebula-two"></div>
-    <div ref="mountPoint" class="absolute inset-0"></div>
-
-    <div class="pointer-events-none absolute left-5 right-5 top-24 z-20 flex items-start justify-between gap-3 text-white">
-      <div class="rounded-2xl border border-white/10 bg-black/25 px-4 py-3 backdrop-blur-md">
-        <div class="flex flex-wrap items-center gap-2 text-xs font-semibold text-white/90"><span>记忆星图</span><template v-for="part in breadcrumb" :key="part"><ChevronRight :size="12" class="text-white/30"/><span class="text-brand-peach">{{ part }}</span></template></div>
-        <p class="mt-1 flex items-center gap-1.5 text-[10px] text-white/45"><MousePointer2 :size="11"/>左键旋转 · 右键或 Shift+左键平移 · 滚轮缩放</p>
+  <Teleport to="body" :disabled="!immersive">
+    <section ref="stage" class="universe-stage" :class="{immersive,reading,'nav-open':navigationOpen}" :data-level="location.level" aria-label="家庭记忆宇宙海">
+      <div ref="canvasHost" class="universe-render"></div>
+      <div class="universe-vignette" aria-hidden="true"></div>
+      <header class="universe-header universe-ui">
+        <div><div class="universe-title-row"><h1>记忆星海</h1><p class="universe-eyebrow">A UNIVERSE OF US</p></div><p class="universe-subtitle"><template v-if="capsuleTotal">{{memoryTotal}} 段记忆 · {{capsuleTotal}} 份珍藏，在星海中重逢。</template><template v-else>{{memoryTotal}} 段记忆，在星光中慢慢重逢。</template></p></div>
+      </header>
+      <div class="universe-control-dock universe-ui ambient-control">
+        <div class="control-dock-bar"><div class="universe-mode"><slot name="mode"/></div><button class="control-dock-toggle" aria-label="搜索与筛选记忆" :aria-expanded="filterOpen" :class="{active:matches!==null}" @click="toggleFilter"><Search :size="17"/></button></div>
       </div>
-      <button v-if="pinned" @click="reset" class="pointer-events-auto flex items-center gap-1.5 rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-[10px] font-semibold text-white/65 backdrop-blur-md transition hover:bg-white/10 hover:text-white"><RotateCcw :size="12"/>取消选择</button>
-    </div>
-
-    <div v-if="loading" class="absolute inset-0 z-40 grid place-items-center text-white/60"><span class="flex items-center gap-2 text-xs"><LoaderCircle :size="16" class="animate-spin"/>正在构建3D记忆星海…</span></div>
-    <div v-else-if="error" class="absolute inset-0 z-40 grid place-items-center px-6 text-center text-sm text-red-200">{{ error }}</div>
-    <div v-else-if="!overview.length" class="absolute inset-0 z-40 grid place-items-center text-sm text-white/50">还没有可以点亮的家庭记忆</div>
-
-    <template v-for="node in nodes.filter(item => item.type === 'year')" :key="node.key">
-      <div v-if="labelPositions[node.key]?.visible" class="pointer-events-none absolute z-20 -translate-x-1/2 translate-y-3 text-center text-white drop-shadow-lg transition-opacity duration-300" :style="{left: `${labelPositions[node.key].x}px`, top: `${labelPositions[node.key].y}px`, opacity: labelOpacity(node)}">
-        <strong class="font-serif text-sm">{{ node.year }}</strong><small class="block text-[8px] text-white/45">{{ node.count }}条</small>
-      </div>
-    </template>
-    <template v-for="node in nodes.filter(item => item.type === 'month')" :key="node.key">
-      <div v-if="showLabel(node) && labelPositions[node.key]?.visible" class="pointer-events-none absolute z-20 -translate-x-1/2 translate-y-2 whitespace-nowrap text-center text-white transition-opacity duration-300" :style="{left: `${labelPositions[node.key].x}px`, top: `${labelPositions[node.key].y}px`, opacity: labelOpacity(node)}">
-        <strong class="text-[10px] font-medium">{{ node.month }}月</strong><small v-if="node.count" class="ml-1 text-[8px] text-white/45">{{ node.count }}</small>
-      </div>
-    </template>
-    <template v-for="node in nodes.filter(item => item.type === 'day')" :key="node.key">
-      <div v-if="showLabel(node) && labelPositions[node.key]?.visible" class="pointer-events-none absolute z-20 -translate-x-1/2 translate-y-2 whitespace-nowrap text-center text-white transition-opacity duration-300" :style="{left: `${labelPositions[node.key].x}px`, top: `${labelPositions[node.key].y}px`, opacity: labelOpacity(node)}">
-        <strong class="text-[9px] font-medium">{{ node.day }}日</strong><small class="ml-1 text-[8px] text-white/40">{{ node.count }}</small>
-      </div>
-    </template>
-
-    <div v-if="detailLoading && activeMemoryId && activeMemoryId !== dismissedMemoryId && !cardMemory" class="pointer-events-none absolute bottom-5 left-1/2 z-40 -translate-x-1/2 rounded-full border border-white/10 bg-black/40 px-3 py-1.5 text-[10px] text-white/60 backdrop-blur"><LoaderCircle :size="11" class="mr-1 inline animate-spin"/>正在唤醒这段记忆</div>
-
-    <Transition name="card-float">
-      <article v-if="cardMemory" class="absolute z-40 w-[270px] overflow-hidden rounded-2xl border border-white/20 bg-[#111523] shadow-[0_24px_80px_rgba(0,0,0,.6)]" :style="cardStyle">
-        <div class="relative aspect-[4/3] overflow-hidden bg-warm-900">
-          <video v-if="mediaUrl(cardMemory) && isVideo(mediaUrl(cardMemory))" :src="mediaUrl(cardMemory)" muted playsinline preload="metadata" class="h-full w-full object-cover"></video>
-          <img v-else-if="mediaUrl(cardMemory)" :src="mediaUrl(cardMemory)" :alt="cardMemory.title" class="h-full w-full object-cover">
-          <div v-else class="grid h-full place-items-center bg-gradient-to-br from-[#27243b] to-[#0e1424] px-6 text-center font-serif text-sm text-white/60">一段被星光收藏的文字记忆</div>
-          <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/25 to-transparent"></div>
-          <div class="absolute left-3 top-3 rounded-xl bg-white/90 px-2.5 py-1.5 text-center text-warm-900 shadow"><strong class="block text-sm leading-none">{{ cardMemory.memoryDate.slice(8) }}</strong><span class="mt-0.5 block text-[9px] font-semibold text-warm-500">{{ cardMemory.memoryDate.slice(5, 7) }}月</span></div>
-          <div class="absolute bottom-3 left-3 right-3 text-white"><span v-if="cardMemory.tags?.length" class="mb-1 inline-block rounded-full bg-brand-coral/90 px-2 py-0.5 text-[9px] font-semibold">{{ cardMemory.tags[0] }}</span><h3 class="line-clamp-2 text-sm font-bold">{{ cardMemory.title }}</h3><div class="mt-2 space-y-1 border-t border-white/20 pt-2 text-[10px] text-white/75"><div class="flex items-center gap-1"><MapPin :size="11" class="text-brand-peach"/><span class="truncate">{{ cardMemory.location || '未记录地点' }}</span></div><div class="flex items-center gap-1"><UserRound :size="11" class="text-brand-peach"/><span class="truncate">{{ cardMemory.authorName }} 发布</span></div></div></div>
+      <div class="universe-camera universe-ui ambient-control" role="group" aria-label="视角与显示控制">
+        <div class="camera-actions">
+          <button v-if="location.level!=='universe'" aria-label="返回上一层" aria-describedby="camera-back-hint" @click="back"><ArrowLeft :size="17"/><span id="camera-back-hint" class="control-tooltip" role="tooltip">返回上一层</span></button>
+          <button aria-label="重新居中" aria-describedby="camera-reset-hint" @click="world?.recenter()"><RotateCcw :size="17"/><span id="camera-reset-hint" class="control-tooltip" role="tooltip">复位当前视角</span></button>
+          <button aria-label="放大星海" aria-describedby="camera-zoom-in-hint" @click="world?.zoom(.8)"><ZoomIn :size="18"/><span id="camera-zoom-in-hint" class="control-tooltip" role="tooltip">放大星海</span></button>
+          <button aria-label="缩小星海" aria-describedby="camera-zoom-out-hint" @click="world?.zoom(1.25)"><ZoomOut :size="18"/><span id="camera-zoom-out-hint" class="control-tooltip" role="tooltip">缩小星海</span></button>
         </div>
-        <RouterLink :to="`/memories/${cardMemory.id}`" class="flex items-center justify-center gap-1 bg-white/5 py-2.5 text-[10px] font-semibold text-brand-peach transition hover:bg-white/10">查看这段记忆 <ChevronRight :size="12"/></RouterLink>
-      </article>
-    </Transition>
-  </div>
-</template>
+        <div class="camera-actions camera-display">
+          <button :aria-label="paused?'继续星海旋转':'暂停星海旋转'" :aria-pressed="paused" :disabled="reduced" aria-describedby="camera-motion-hint" @click="paused=!paused"><Play v-if="paused" :size="16"/><Pause v-else :size="16"/><span id="camera-motion-hint" class="control-tooltip" role="tooltip">{{reduced?'已启用系统减少动态效果':paused?'继续星海旋转':'暂停星海旋转'}}</span></button>
+          <button aria-label="隐藏界面，进入沉浸模式" aria-describedby="camera-immersive-hint" @click="toggleImmersive"><EyeOff :size="16"/><span id="camera-immersive-hint" class="control-tooltip" role="tooltip">全屏沉浸 · 隐藏界面</span></button>
+        </div>
+      </div>
+      <div class="universe-toolbar universe-ui ambient-control">
+        <UniverseBreadcrumb :path="breadcrumb" @navigate="navigate"/>
 
-<style scoped>
-.cosmic-veil{position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at 50% 48%,rgba(75,91,155,.11),transparent 46%),radial-gradient(ellipse at 12% 78%,rgba(96,63,117,.08),transparent 38%),radial-gradient(ellipse at 88% 22%,rgba(46,89,130,.08),transparent 36%);mix-blend-mode:screen}
-.nebula{position:absolute;inset:-18%;pointer-events:none;will-change:transform,opacity;filter:blur(44px);mix-blend-mode:screen}
-.nebula-one{background:radial-gradient(ellipse at 28% 42%,rgba(80,91,164,.13) 0%,rgba(50,58,112,.055) 28%,transparent 62%);animation:nebula-drift-one 68s ease-in-out infinite alternate}
-.nebula-two{background:radial-gradient(ellipse at 72% 58%,rgba(145,81,106,.085) 0%,rgba(102,69,115,.035) 31%,transparent 64%);animation:nebula-drift-two 82s ease-in-out infinite alternate}
-@keyframes nebula-drift-one{0%{transform:translate3d(-3%,-1%,0) scale(1) rotate(-2deg);opacity:.65}55%{opacity:.95}100%{transform:translate3d(5%,3%,0) scale(1.08) rotate(3deg);opacity:.72}}
-@keyframes nebula-drift-two{0%{transform:translate3d(4%,2%,0) scale(1.06);opacity:.58}100%{transform:translate3d(-5%,-4%,0) scale(.98);opacity:.9}}
-.card-float-enter-active,.card-float-leave-active{transition:opacity .22s ease,filter .22s ease}.card-float-enter-from,.card-float-leave-to{opacity:0;filter:blur(8px)}
-@media(max-width:767px){.cosmos{min-height:calc(100vh - 64px)}}
-@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}.nebula{animation:none}}
-</style>
+      </div>
+      <form v-if="filterOpen" class="universe-filter universe-ui" @submit.prevent="applyFilters">
+        <div class="flex items-center justify-between"><h2>寻找一段记忆</h2><button type="button" aria-label="关闭筛选" @click="filterOpen=false"><X :size="17"/></button></div>
+        <label>关键词<div class="filter-input"><Search :size="16"/><input v-model="keyword" placeholder="搜索记忆或珍藏的标题" aria-label="星海搜索关键词"/></div></label>
+        <label>内容类型<select v-model="mediaType" aria-label="记忆类型"><option value="all">记忆与珍藏</option><option value="memory">记忆</option><option value="capsule">珍藏</option></select></label>
+        <label class="quality-option"><input v-model="lowQuality" type="checkbox"/>轻量画质<span>适合手机与较慢的设备</span></label>
+        <p v-if="filterError" role="alert" class="filter-error">{{filterError}}</p>
+        <div class="filter-actions"><button type="button" @click="clearFilters">重置</button><button type="submit" :disabled="filtering"><LoaderCircle v-if="filtering" :size="15" class="animate-spin"/>{{filtering?'正在寻找…':'点亮匹配记忆'}}</button></div>
+      </form>
+      <div v-if="matches!==null" class="universe-filter-summary universe-ui" role="status"><Sparkles :size="13"/>{{searchPage?.total || 0}} 项匹配内容 · {{appliedFilter}}<span v-if="searchPages>1" class="search-result-pages"><button aria-label="上一页搜索结果" :disabled="filtering || (searchPage?.page||1)<=1" @click="loadSearch((searchPage?.page||1)-1)"><ChevronLeft :size="13"/></button>{{searchPage?.page}} / {{searchPages}}<button aria-label="下一页搜索结果" :disabled="filtering || !searchPage?.hasMore" @click="loadSearch((searchPage?.page||1)+1)"><ChevronRight :size="13"/></button></span><button aria-label="重新定位搜索结果" @click="refocusSearch"><ZoomIn :size="14"/></button><button aria-label="清除筛选" @click="clearFilters"><X :size="14"/></button></div>
+
+      <div v-if="nodes.length" class="star-targets universe-ui">
+        <button v-for="item in visibleLabels" :key="item.node.key" class="star-target" :class="{'star-empty':!item.node.count,'star-dim':!isMatch(item.node),'star-memory':item.node.kind==='memory','star-capsule':item.node.kind==='capsule','star-ancestor':item.ancestor,'star-selected':selectedStar===item.node.key}"
+          :data-node-key="item.node.key" :aria-label="accessibleLabel(item.node)" :disabled="!item.node.count || !isMatch(item.node)"
+          :style="{left:`${item.x}px`,top:`${item.y}px`,'--star-color':item.node.color}" @click="activateAt($event,item.node)" @pointerenter="hoverAt($event,item.node)" @pointermove="hoverAt($event,item.node)" @pointerleave="world?.requestHover(null)" @focus="focusStar($event,item.node.key)" @blur="world?.requestHover(null)">
+          <span v-if="contextLabelKeys.has(item.node.key)" class="star-date" :style="datePlacements.get(item.node.key)" aria-hidden="true">{{dateLabel(item.node)}}</span>
+        </button>
+      </div>
+
+
+
+      <div v-if="hoveredMemoryNode && !reading" class="memory-star-preview universe-ui" role="tooltip" :style="memoryPreviewStyle" @pointerenter="world?.holdHover()" @pointerleave="world?.requestHover(null)">
+        <small>{{hoveredMemoryNode.node.year}}年{{hoveredMemoryNode.node.month}}月{{hoveredMemoryNode.node.day}}日 · {{hoveredMemoryNode.node.kind==='capsule'?'珍藏 · 封存':'记忆'}}</small>
+        <strong>{{label(hoveredMemoryNode.node)}}</strong><span>{{hoveredMemoryNode.node.kind==='capsule'?'点击查看珍藏及开启状态':'点击星点，翻阅故事'}} <ArrowUpRight :size="11"/></span>
+      </div>
+
+      <div v-if="loading" class="universe-loading-note" role="status"><LoaderCircle :size="24" class="animate-spin"/><p>正在补全时间星图…</p></div>
+      <div v-else-if="error" class="universe-loading-note universe-load-error" role="alert"><p>{{error}}</p><button @click="initialize">重新打开星海</button><p class="text-xs">也可以切换到时光相册继续浏览。</p></div>
+      <div v-else-if="!total" class="universe-status"><Sparkles :size="28"/><h2>这里，等待第一颗记忆星</h2><p>记下今天的小事，让星海从这一刻开始。</p></div>
+      <div v-if="monthError" class="universe-data-error universe-ui" role="alert"><span>{{monthError}}</span><button @click="retryMonth">重新载入</button></div>
+      <div v-else-if="monthLoading" class="universe-data-error universe-ui" role="status"><LoaderCircle :size="14" class="animate-spin"/>正在补全这片星海…</div>
+
+      <Transition name="navigation"><aside v-if="overviewReady && total && navigationOpen" id="universe-navigation" class="universe-rail universe-ui ambient-control" aria-label="时间导航面板">
+        <header class="navigation-heading"><div class="time-navigation-actions"><h2>时间导航</h2><button v-if="location.level!=='universe'" class="rail-back" aria-label="时间导航：返回上一层" @click="back"><ChevronLeft :size="13"/>上一级</button><button v-if="location.level!=='universe'" class="rail-back" aria-label="时间导航：返回全景" @click="navigate({level:'universe'})"><Home :size="12"/>全景</button></div><button aria-label="收起时间导航" @click="closeNavigation"><X :size="15"/></button></header>
+        <div class="rail-caption"><span>{{levelTitle}}</span></div>
+        <div v-if="memoryPages>1" class="memory-pages"><button aria-label="上一页当天记忆" :disabled="memoryPage===0" @click="changeDayPage(memoryPage-1)"><ChevronLeft :size="14"/></button><span>{{memoryPage+1}} / {{memoryPages}}</span><button aria-label="下一页当天记忆" :disabled="memoryPage>=memoryPages-1" @click="changeDayPage(memoryPage+1)"><ChevronRight :size="14"/></button></div>
+        <div class="rail-stops" :key="currentKey" role="group" aria-label="宇宙时间导航">
+          <button v-for="node in railNodes" :key="node.key" :class="{'memory-stop':node.kind==='memory'||node.kind==='capsule'}" :disabled="!isMatch(node)" :aria-label="accessibleLabel(node)" :style="{'--star-color':node.color}" @click="activate(node)"><img v-if="thumbnail(node)" :src="thumbnail(node)" alt="" class="rail-thumbnail" @error="hideBrokenThumbnail"/><i v-else></i><span>{{label(node)}}</span><small v-if="node.kind!=='memory'&&node.kind!=='capsule'">{{contentCountLabel(node)}}</small></button>
+        </div>
+
+      </aside></Transition>
+      <button v-if="overviewReady && total && !navigationOpen" class="time-navigation-toggle universe-ui ambient-control" data-navigation-toggle aria-label="展开时间导航" @click="toggleNavigation"><PanelRightOpen :size="15"/>时间导航</button>
+      <p class="universe-instruction universe-ui">拖动探索 · 双指或滚轮缩放 · 轻点星光靠近</p>
+      <button v-if="immersive" class="immersive-exit" @click="immersive=false" aria-label="退出沉浸模式"><Eye :size="17"/>显示界面<span>Esc</span></button>
+
+      <Transition name="reader"><div v-if="reading" class="universe-reader-layer" @click.self="closeReader">
+        <section ref="readerPanel" class="universe-reader" :class="{'reader-note':!media.length}" role="dialog" aria-modal="true" aria-label="当天的家庭记忆" tabindex="-1">
+          <header class="reader-header"><span>{{readerNode?.year}}年{{readerNode?.month}}月{{readerNode?.day}}日<small>这一天，被好好珍藏</small></span><button aria-label="关闭记忆，返回星海" @click="closeReader"><X :size="21"/></button></header>
+          <div v-if="detailLoading && !memory" class="reader-loading"><LoaderCircle class="animate-spin"/>正在唤醒这段记忆…</div>
+          <div v-else-if="detailError" class="reader-loading" role="alert"><p>{{detailError}}</p><button @click="selectedMemoryId && openMemory(selectedMemoryId)">重新载入</button></div>
+          <div v-else-if="memory" class="reader-content">
+            <div v-if="media.length" class="reader-media"><video v-if="isVideo(media[photoIndex]!)" :key="media[photoIndex]" :src="media[photoIndex]" controls playsinline/><MemoryImage v-else :key="media[photoIndex]" :src="media[photoIndex]!" :alt="memory.title" fit="contain" eager/><div v-if="media.length>1" class="reader-photos"><button aria-label="上一张照片" @click="shiftPhoto(-1)"><ChevronLeft :size="18"/></button><span>{{photoIndex+1}} / {{media.length}}</span><button aria-label="下一张照片" @click="shiftPhoto(1)"><ChevronRight :size="18"/></button></div></div>
+            <div class="reader-story"><p class="universe-eyebrow">A MOMENT WORTH KEEPING</p><h2>{{memory.title}}</h2><p class="reader-author">{{memory.authorName}} 记录<template v-if="memory.location"><span>·</span><MapPin :size="13"/>{{memory.location}}</template></p><div class="reader-prose">{{memory.content || '有些瞬间，无需言语，照片已经替我们记住。'}}</div><audio v-if="memory.audioUrl" :src="memory.audioUrl" controls/><div class="reader-tags"><span v-for="tag in memory.tags" :key="tag"># {{tag}}</span></div><RouterLink :to="`/memories/${memory.id}`" class="reader-link">翻开完整故事与家人回应<ArrowUpRight :size="16"/></RouterLink></div>
+          </div>
+          <div v-if="dayNodes.length>1" class="reader-picks" role="group" aria-label="当天记忆列表"><button v-for="node in readerChoices" :key="node.key" :aria-pressed="node.memoryId===selectedMemoryId" @click="node.memoryId && openMemory(node.memoryId)"><img v-if="thumbnail(node)" :src="thumbnail(node)" alt="" @error="hideBrokenThumbnail"/><span>{{label(node)}}</span></button></div>
+          <footer class="reader-footer"><button :disabled="dayNodes.length<2" @click="stepMemory(-1)" aria-label="当天上一段记忆"><ChevronLeft :size="19"/></button><span>当前载入第 {{Math.max(0,chosenIndex)+1}} / {{dayNodes.length}} 段记忆</span><button :disabled="dayNodes.length<2" @click="stepMemory(1)" aria-label="当天下一段记忆"><ChevronRight :size="19"/></button></footer>
+        </section>
+      </div></Transition>
+    </section>
+  </Teleport>
+</template>

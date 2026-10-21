@@ -139,3 +139,15 @@ export interface ApiResult<T> {
     message: string;
     data: T
 }
+
+
+/** 星海索引来源；不对应媒体类型。 */
+export type UniverseSourceType = 'MEMORY' | 'CAPSULE'
+export interface UniverseDaySummary { date:string; day:number; memoryCount:number; capsuleCount:number }
+export interface UniverseMonthSummary { month:number; memoryCount:number; capsuleCount:number; days:UniverseDaySummary[] }
+export interface UniverseYearSummary { year:number; memoryCount:number; capsuleCount:number; months:UniverseMonthSummary[] }
+export interface UniverseOverview { memoryCount:number; capsuleCount:number; years:UniverseYearSummary[] }
+/** 点击日期或搜索后才加载；不含正文、图片或珍藏开启状态。 */
+export interface UniverseItem { indexId:number; sourceType:UniverseSourceType; sourceId:number; nodeDate:string; title:string }
+export interface UniversePage { total:number; page:number; size:number; hasMore:boolean; items:UniverseItem[] }
+export interface UniverseBatch { year:number; items:UniverseItem[]; nextAfterId:number; hasMore:boolean }

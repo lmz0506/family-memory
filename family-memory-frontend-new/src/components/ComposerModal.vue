@@ -1,122 +1,76 @@
 <script setup lang="ts">
-import {computed, reactive, ref} from 'vue'
-import {Image, LoaderCircle, Mic, X} from 'lucide-vue-next'
+import {computed, onBeforeUnmount, reactive, ref, toRef, watch} from 'vue'
+import {Image, LoaderCircle, Mic, X, Film, Trash2} from 'lucide-vue-next'
 import {memoryApi, uploadApi} from '@/api'
+import {useDialog} from '@/composables/useDialog'
+import {notify} from '@/composables/useToast'
+import UploadProgress, {type UploadItem} from './UploadProgress.vue'
 
-const props = defineProps<{ modelValue: boolean; familyId: number }>()
-const emit = defineEmits<{ (e: 'update:modelValue', value: boolean): void; (e: 'created'): void }>()
+const props = defineProps<{modelValue:boolean; familyId:number}>()
+const emit = defineEmits<{'update:modelValue':[value:boolean]; created:[]}>()
+const panel = ref<HTMLElement>()
 const files = ref<File[]>([])
 const audioFile = ref<File | null>(null)
 const saving = ref(false)
 const error = ref('')
-const form = reactive({
-  title: '',
-  content: '',
-  memoryDate: new Date().toISOString().slice(0, 10),
-  location: '',
-  tags: ''
-})
-const previews = computed(() => files.value.map(file => URL.createObjectURL(file)))
-
-function choose(event: Event) {
-  files.value = Array.from((event.target as HTMLInputElement).files || []).slice(0, 9)
-}
-
-function chooseAudio(event: Event) {
-  audioFile.value = (event.target as HTMLInputElement).files?.[0] || null
-}
-
-function close() {
-  if (!saving.value) emit('update:modelValue', false)
-}
-
-async function submit() {
-  if (!form.title.trim()) {
-    error.value = '给这段记忆起个名字吧';
-    return
-  }
-  saving.value = true
-  error.value = ''
-  try {
-    const mediaUrls: string[] = []
-    for (const file of files.value) mediaUrls.push((await uploadApi.file(file)).url)
-    const audioUrl = audioFile.value ? (await uploadApi.file(audioFile.value, 'audio')).url : ''
-    await memoryApi.create(props.familyId, {
-      title: form.title, content: form.content, type: files.value.length ? 'photo' : audioUrl ? 'audio' : 'note',
-      memoryDate: form.memoryDate, location: form.location, audioUrl, mediaUrls,
-      tags: form.tags.split(/[,，]/).map(value => value.trim()).filter(Boolean),
-    })
-    Object.assign(form, {
-      title: '',
-      content: '',
-      memoryDate: new Date().toISOString().slice(0, 10),
-      location: '',
-      tags: ''
-    })
-    files.value = []
-    audioFile.value = null
-    emit('created')
-    emit('update:modelValue', false)
-  } catch (e) {
-    error.value = (e as Error).message
-  } finally {
-    saving.value = false
-  }
+const previews = ref<Array<{file:File; url:string}>>([])
+const uploads = ref<UploadItem[]>([])
+const uploaded = new Map<File,string>()
+function localToday(){const date=new Date();return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`}
+const form = reactive({title:'',content:'',memoryDate:localToday(),location:'',tags:''})
+const allFiles = computed(()=>[...files.value,...(audioFile.value?[audioFile.value]:[])])
+function clearPreviews(){previews.value.forEach(item=>URL.revokeObjectURL(item.url))}
+watch(files,value=>{clearPreviews();previews.value=value.map(file=>({file,url:URL.createObjectURL(file)}))})
+onBeforeUnmount(clearPreviews)
+function choose(event:Event){const selected=Array.from((event.target as HTMLInputElement).files||[]); files.value=[...files.value,...selected].slice(0,9);(event.target as HTMLInputElement).value=''; if(selected.length>9)notify('一次最多珍藏 9 个照片或视频','info')}
+function chooseAudio(event:Event){audioFile.value=(event.target as HTMLInputElement).files?.[0]||null}
+function close(){if(!saving.value)emit('update:modelValue',false)}
+useDialog(toRef(props,'modelValue'),panel,close)
+async function submit(){
+  if(saving.value)return
+  if(!form.title.trim()){error.value='给这段记忆起个名字吧';return}
+  saving.value=true;error.value=''
+  uploads.value=allFiles.value.map(file=>({name:file.name,progress:uploaded.has(file)?100:0,state:uploaded.has(file)?'done':'waiting'}))
+  try{
+    for(const [index,file] of allFiles.value.entries()){
+      if(uploaded.has(file))continue
+      const entry=uploads.value[index]!
+      entry.state='uploading'
+      try{const result=await uploadApi.file(file,file===audioFile.value?'audio':'memory',percent=>entry.progress=percent);uploaded.set(file,result.url);entry.progress=100;entry.state='done'}
+      catch(e){entry.state='error';throw e}
+    }
+    const mediaUrls=files.value.map(file=>uploaded.get(file)!)
+    const audioUrl=audioFile.value?uploaded.get(audioFile.value):''
+    await memoryApi.create(props.familyId,{...form,title:form.title.trim(),type:files.value.length?'photo':audioUrl?'audio':'note',mediaUrls,audioUrl,tags:form.tags.split(/[,，]/).map(value=>value.trim()).filter(Boolean)})
+    Object.assign(form,{title:'',content:'',memoryDate:localToday(),location:'',tags:''});files.value=[];audioFile.value=null;uploads.value=[];uploaded.clear()
+    emit('created');emit('update:modelValue',false);notify('这一刻，已经被好好珍藏')
+  }catch(e){error.value=(e as Error).message;notify('暂时没有保存成功，内容已为你保留','error')}
+  finally{saving.value=false}
 }
 </script>
-
 <template>
-  <Transition name="fade">
-    <div v-if="modelValue"
-         class="fixed inset-0 z-50 flex items-end justify-center bg-ink/45 backdrop-blur-sm sm:items-center sm:p-5"
-         @click.self="close">
-      <section
-          class="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-[34px] bg-[#fffdf9] p-6 shadow-2xl sm:rounded-[34px] sm:p-7">
-        <div class="flex items-center justify-between">
-          <div><p class="text-[10px] font-bold tracking-[.2em] text-peach-600">NEW MEMORY</p>
-            <h2 class="mt-1 font-display text-2xl font-black">记录这一刻</h2></div>
-          <button @click="close" class="grid h-10 w-10 place-items-center rounded-full bg-stone-100">
-            <X :size="18"/>
-          </button>
-        </div>
-        <p v-if="error" class="mt-4 rounded-xl bg-red-50 px-3 py-2 text-xs text-red-600">{{ error }}</p>
-        <input v-model="form.title" maxlength="120"
-               class="mt-5 w-full border-0 bg-transparent font-display text-xl font-bold outline-none placeholder:text-stone-300"
-               placeholder="给这段记忆起个名字"/>
-        <textarea v-model="form.content"
-                  class="mt-3 h-24 w-full resize-none border-0 bg-transparent text-sm leading-7 outline-none placeholder:text-stone-300"
-                  placeholder="今天发生了什么值得记住的事？"></textarea>
-        <div v-if="previews.length" class="no-scrollbar mt-3 flex gap-2 overflow-x-auto"><img v-for="url in previews"
-                                                                                              :key="url" :src="url"
-                                                                                              class="h-24 w-24 shrink-0 rounded-2xl object-cover"/>
-        </div>
-        <div class="mt-5 grid grid-cols-2 gap-3">
-          <label
-              class="flex cursor-pointer flex-col items-center gap-2 rounded-2xl bg-peach-50 py-4 text-[10px] font-bold text-peach-600">
-            <Image :size="20"/>
-            照片视频<input type="file" multiple accept="image/*,video/*" class="hidden" @change="choose"/></label>
-          <label
-              class="flex cursor-pointer flex-col items-center gap-2 rounded-2xl bg-sky-50 py-4 text-[10px] font-bold text-sky-600">
-            <Mic :size="20"/>
-            {{ audioFile ? '已选声音' : '一段声音' }}<input type="file" accept="audio/*" class="hidden"
-                                                            @change="chooseAudio"/></label>
-        </div>
-        <p v-if="audioFile" class="mt-2 truncate text-[10px] text-sky-600">声音：{{ audioFile.name }}</p>
-        <div class="mt-5 grid gap-3 sm:grid-cols-2"><label class="text-[10px] font-bold text-stone-400">发生日期<input
-            v-model="form.memoryDate" type="date"
-            class="mt-1 w-full rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-xs text-ink outline-none focus:border-peach-300"/></label><label
-            class="text-[10px] font-bold text-stone-400">地点<input v-model="form.location"
-                                                                    class="mt-1 w-full rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-xs text-ink outline-none focus:border-peach-300"
-                                                                    placeholder="例如：东湖绿道"/></label></div>
-        <input v-model="form.tags"
-               class="mt-3 w-full rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-peach-300"
-               placeholder="标签，用逗号分隔"/>
-        <button :disabled="saving" @click="submit"
-                class="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-peach-500 py-3.5 text-sm font-bold text-white shadow-float disabled:opacity-60">
-          <LoaderCircle v-if="saving" :size="17" class="animate-spin"/>
-          {{ saving ? '正在珍藏...' : '珍藏这段记忆' }}
-        </button>
-      </section>
-    </div>
-  </Transition>
+  <Teleport to="body"><Transition name="fade"><div v-if="modelValue" class="composer-backdrop" @click.self="close">
+    <form ref="panel" role="dialog" aria-modal="true" aria-labelledby="composer-title" tabindex="-1" class="composer-panel" @submit.prevent="submit">
+      <header class="flex items-center justify-between"><div><p class="page-eyebrow">A MOMENT TO KEEP</p><h2 id="composer-title" class="mt-1 font-serif text-2xl font-bold">记录这一刻</h2></div><button type="button" :disabled="saving" aria-label="关闭记忆编辑" @click="close" class="grid h-11 w-11 place-items-center rounded-full bg-warm-100"><X :size="20"/></button></header>
+      <p v-if="error" role="alert" class="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{{error}}</p>
+      <fieldset :disabled="saving" class="mt-5 space-y-4">
+        <label class="block"><span class="sr-only">记忆标题</span><input v-model="form.title" required maxlength="120" autofocus class="w-full border-0 bg-transparent font-serif text-xl font-bold outline-none placeholder:text-warm-400" placeholder="给这段记忆起个名字"/></label>
+        <label class="block"><span class="sr-only">记忆故事</span><textarea v-model="form.content" rows="4" class="w-full resize-y border-0 bg-transparent text-base leading-7 outline-none placeholder:text-warm-400" placeholder="今天发生了什么值得记住的事？"></textarea></label>
+        <div v-if="previews.length" class="flex flex-wrap gap-3"><div v-for="(item,index) in previews" :key="item.url" class="relative h-24 w-24 overflow-hidden rounded-xl bg-warm-100"><video v-if="item.file.type.startsWith('video/')" :src="item.url" class="h-full w-full object-cover" muted preload="metadata"/><img v-else :src="item.url" :alt="item.file.name" class="h-full w-full object-cover"/><button type="button" :aria-label="`移除${item.file.name}`" class="absolute right-1 top-1 grid h-7 w-7 place-items-center rounded-full bg-black/60 text-white" @click="files=files.filter((_,i)=>i!==index)"><X :size="14"/></button></div></div>
+        <div class="grid grid-cols-2 gap-3"><label class="relative flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-warm-300 bg-warm-50 py-4 text-sm font-semibold text-warm-800"><Image :size="20"/>照片或视频<input type="file" multiple accept="image/*,video/*" class="absolute inset-0 w-full cursor-pointer opacity-0" aria-label="选择照片或视频，最多9个" @change="choose"/></label><label class="relative flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-warm-300 bg-warm-50 py-4 text-sm font-semibold text-warm-800"><Mic :size="20"/>一段声音<input type="file" accept="audio/*" class="absolute inset-0 w-full cursor-pointer opacity-0" aria-label="选择声音文件" @change="chooseAudio"/></label></div>
+        <div v-if="audioFile" class="flex items-center justify-between gap-2 rounded-xl bg-warm-50 p-3 text-sm"><span class="truncate">{{audioFile.name}}</span><button type="button" aria-label="移除声音" @click="audioFile=null"><Trash2 :size="16"/></button></div>
+        <p class="text-xs text-warm-500">最多 9 个照片或视频，也可以只写一段故事。</p>
+        <div class="grid gap-3 sm:grid-cols-2"><label class="text-sm text-warm-500">发生日期<input v-model="form.memoryDate" required type="date" class="mt-1.5 w-full rounded-xl border border-warm-200 bg-white p-3 text-base text-ink"/></label><label class="text-sm text-warm-500">地点<input v-model="form.location" class="mt-1.5 w-full rounded-xl border border-warm-200 bg-white p-3 text-base text-ink" placeholder="例如：东湖绿道"/></label></div>
+        <label class="block text-sm text-warm-500">标签<input v-model="form.tags" class="mt-1.5 w-full rounded-xl border border-warm-200 bg-white p-3 text-base text-ink" placeholder="用逗号分隔，例如：生日，旅行"/></label>
+      </fieldset>
+      <UploadProgress v-if="uploads.length" :items="uploads" :busy="saving" class="mt-4" @retry="submit"/>
+      <footer class="composer-footer"><button :disabled="saving" class="flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-brand-coral text-base font-semibold text-white transition hover:bg-brand-coral-hover disabled:opacity-60"><LoaderCircle v-if="saving" :size="18" class="animate-spin"/>{{saving?'正在珍藏…':'珍藏这段记忆'}}</button></footer>
+    </form>
+  </div></Transition></Teleport>
 </template>
+<style scoped>
+.composer-backdrop{position:fixed;inset:0;z-index:90;display:flex;align-items:center;justify-content:center;padding:24px;background:#332e2b70;backdrop-filter:blur(6px)}
+.composer-panel{width:100%;max-width:580px;max-height:90dvh;overflow-y:auto;overscroll-behavior:contain;background:#fffdf9;border-radius:28px;padding:28px;box-shadow:0 24px 80px #332e2b30;outline:none}
+.composer-footer{position:sticky;bottom:-28px;padding:20px 0 10px;background:linear-gradient(transparent,#fffdf9 20%)}
+@media(max-width:639px){.composer-backdrop{padding:0;align-items:flex-end}.composer-panel{max-height:94dvh;border-radius:26px 26px 0 0;padding:24px 20px;padding-bottom:max(20px,env(safe-area-inset-bottom))}}
+</style>

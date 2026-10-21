@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import {computed, onMounted, ref} from 'vue'
+import {computed, onBeforeUnmount, onMounted, ref} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
 import {
-  Bell, CalendarDays, Heart, Home, LockKeyhole, LogOut, PanelLeftClose, PanelLeftOpen,
+  CalendarDays, Heart, Home, LockKeyhole, LogOut, PanelLeftClose, PanelLeftOpen,
   Plus, Search, Settings, Sparkles, Users
 } from 'lucide-vue-next'
 import {useAuthStore} from '@/stores/auth'
@@ -31,7 +31,10 @@ const currentDate = computed(() => new Intl.DateTimeFormat('zh-CN', {
   year: 'numeric', month: 'long', day: 'numeric', weekday: 'long'
 }).format(new Date()))
 
+function openComposer() {composer.value = true}
+onBeforeUnmount(() => window.removeEventListener('family-memory-compose', openComposer))
 onMounted(async () => {
+  window.addEventListener('family-memory-compose', openComposer)
   await family.load()
   if (!family.current && route.name !== 'welcome') router.replace('/welcome')
 })
@@ -55,7 +58,7 @@ async function handleCreated() {
 </script>
 
 <template>
-  <div class="flex h-screen w-full overflow-hidden bg-[#fafaf7] text-[#332e2b]">
+  <div class="flex h-[100dvh] w-full overflow-hidden bg-[#fafaf7] text-[#332e2b]">
     <aside class="relative z-30 hidden shrink-0 flex-col justify-between overflow-hidden border-r border-warm-100/80 bg-white/90 transition-all duration-300 lg:flex"
            :class="collapsed ? 'w-[76px]' : 'w-64'">
       <div>
@@ -95,7 +98,7 @@ async function handleCreated() {
         </div>
 
         <div class="relative">
-          <button @click="mobileMenu=!mobileMenu" class="flex w-full items-center justify-between rounded-xl p-2.5 text-left transition hover:bg-warm-100/50">
+          <button @click="mobileMenu=!mobileMenu" aria-label="账号菜单" :aria-expanded="mobileMenu" class="flex w-full items-center justify-between rounded-xl p-2.5 text-left transition hover:bg-warm-100/50">
             <div class="flex min-w-0 items-center gap-3">
               <div class="relative grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand-coral-light text-xs font-bold text-brand-coral ring-2 ring-warm-100">
                 {{ initial }}<span class="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white"></span>
@@ -120,23 +123,27 @@ async function handleCreated() {
           <button @click="collapsed=!collapsed" class="hidden rounded-xl p-2 text-warm-500 transition hover:bg-warm-100/60 hover:text-warm-800 lg:grid" title="展开/收起菜单">
             <PanelLeftOpen v-if="collapsed" :size="20"/><PanelLeftClose v-else :size="20"/>
           </button>
-          <div class="flex items-center gap-2 lg:hidden">
+          <div class="flex shrink-0 items-center gap-2 lg:hidden">
             <div class="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-tr from-brand-coral to-brand-peach text-white"><Sparkles :size="18"/></div>
-            <span class="hidden font-bold text-warm-900 sm:inline">拾光</span>
+            <span class="hidden whitespace-nowrap font-bold text-warm-900 sm:inline">拾光</span>
           </div>
           <form @submit.prevent="submitSearch" class="relative w-full max-w-xl">
             <Search :size="16" class="absolute left-3.5 top-1/2 -translate-y-1/2 text-warm-400"/>
-            <input v-model="search" class="w-full rounded-full border border-warm-100 bg-warm-50/80 py-2 pl-10 pr-4 text-xs text-warm-800 outline-none transition placeholder:text-warm-400 focus:border-brand-coral focus:ring-2 focus:ring-brand-coral/30"
-                   placeholder="搜索珍贵回忆、照片标签、家人的留言……"/>
+            <input v-model="search" class="w-full rounded-full border border-warm-100 bg-warm-50/80 py-2.5 pl-10 pr-4 text-sm text-warm-800 outline-none transition placeholder:text-warm-400 focus:border-brand-coral focus:ring-2 focus:ring-brand-coral/30"
+                   aria-label="搜索家庭记忆" placeholder="寻找照片、故事与家人的回忆"/>
           </form>
         </div>
         <div class="ml-3 flex items-center gap-3">
-          <button class="relative rounded-full p-2 text-warm-500 transition hover:bg-warm-100/60 hover:text-warm-800"><Bell :size="20"/><span class="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-brand-coral ring-2 ring-white"></span></button>
-          <div class="hidden items-center gap-2 rounded-full bg-warm-100/50 px-3 py-1.5 text-xs font-medium text-warm-800 sm:flex"><CalendarDays :size="14" class="text-brand-coral"/>{{ currentDate }}</div>
+          <button @click="mobileMenu=!mobileMenu" aria-label="账号菜单" :aria-expanded="mobileMenu" class="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brand-coral-light text-sm font-bold text-brand-coral lg:hidden">{{ initial }}</button>
+          <div class="hidden items-center gap-2 rounded-full bg-warm-100/50 px-3 py-1.5 text-xs font-medium text-warm-800 xl:flex"><CalendarDays :size="14" class="text-brand-coral"/>{{ currentDate }}</div>
+        </div>
+        <div v-if="mobileMenu" class="absolute right-4 top-16 z-50 w-56 rounded-2xl border border-warm-200 bg-white p-3 shadow-soft-lg lg:hidden">
+          <p class="px-2 py-2 text-sm font-semibold">{{ auth.user?.nickname }} · {{ family.current?.name }}</p>
+          <button @click="logout" class="flex min-h-11 w-full items-center gap-2 rounded-xl px-3 text-sm text-rose-600 hover:bg-rose-50"><LogOut :size="16"/>退出登录</button>
         </div>
       </header>
 
-      <div class="flex-1 overflow-y-auto p-4 pb-28 sm:p-6 sm:pb-28 md:p-8 lg:pb-8">
+      <div data-app-scroll class="flex-1 overflow-y-auto overscroll-y-contain p-4 pb-28 sm:p-6 sm:pb-28 md:p-8 lg:pb-8">
         <RouterView/>
       </div>
     </main>
@@ -146,9 +153,9 @@ async function handleCreated() {
       <Plus :size="22"/>
     </button>
 
-    <nav v-if="!detailPage" class="fixed inset-x-3 bottom-3 z-40 mx-auto flex h-[68px] max-w-md items-center justify-around rounded-[22px] border border-white/70 bg-white/90 px-2 shadow-2xl backdrop-blur-xl lg:hidden">
+    <nav v-if="!detailPage" class="fixed inset-x-3 bottom-[max(12px,env(safe-area-inset-bottom))] z-40 mx-auto flex h-[68px] max-w-md items-center justify-around rounded-[22px] border border-white/70 bg-white/90 px-2 shadow-2xl backdrop-blur-xl lg:hidden">
       <RouterLink v-for="item in nav" :key="item.name" :to="{name:item.name}" :aria-label="item.label"
-                  class="flex min-w-[62px] flex-col items-center gap-1 text-[9px] font-semibold"
+                  class="flex min-w-[62px] flex-col items-center gap-1 text-xs font-semibold"
                   :class="route.name===item.name?'text-brand-coral':'text-warm-400'">
         <span class="grid h-8 w-10 place-items-center rounded-xl" :class="route.name===item.name?'bg-brand-coral-light':''"><component :is="item.icon" :size="19"/></span>{{ item.label }}
       </RouterLink>

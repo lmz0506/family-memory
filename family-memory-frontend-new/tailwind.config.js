@@ -6,8 +6,8 @@ export default {
             colors: {
                 ink: '#3f342f',
                 cream: '#fffaf5',
-                peach: {50: '#fff4f0', 100: '#ffe4dc', 300: '#ffb2a2', 500: '#f87867', 600: '#e96252'},
-                warm: {50: '#FDFAF7', 100: '#F7F1E9', 200: '#EFE3D4', 300: '#E0CBB4', 400: '#C8A282', 500: '#A27B5C', 800: '#4A3E35', 900: '#2C241E'},
+                peach: {50: '#fff4f0', 100: '#ffe4dc', 300: '#ffb2a2', 500: '#d85e46', 600: '#bf4c36'},
+                warm: {50: '#FDFAF7', 100: '#F7F1E9', 200: '#EFE3D4', 300: '#E0CBB4', 400: '#967960', 500: '#806249', 600: '#70543e', 700: '#5d493a', 800: '#4A3E35', 900: '#2C241E'},
                 brand: {coral: '#E76F51', 'coral-hover': '#D85A3C', 'coral-light': '#FDF0EC', peach: '#F4A261', sand: '#264653'}
             },
             fontFamily: {

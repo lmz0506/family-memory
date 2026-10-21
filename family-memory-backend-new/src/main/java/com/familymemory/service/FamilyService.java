@@ -31,16 +31,50 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
+/**
+ * 家庭成员权限、家庭资料、邀请码及加入家庭业务。
+ */
 @Service
 public class FamilyService {
+    /**
+     * 家庭空间持久层，对应表：fm_family。
+     */
     private final FamilyMapper familyMapper;
+    /**
+     * 家庭成员关系持久层，对应表：fm_family_member。
+     */
     private final FamilyMemberMapper memberMapper;
+    /**
+     * 用户账号持久层，对应表：fm_user。
+     */
     private final UserMapper userMapper;
+    /**
+     * 家庭邀请码持久层，对应表：fm_invite_code。
+     */
     private final InviteCodeMapper inviteMapper;
+    /**
+     * 家庭记忆持久层，对应表：fm_memory。
+     */
     private final MemoryMapper memoryMapper;
+    /**
+     * 记忆图片与视频持久层，对应表：fm_memory_media。
+     */
     private final MemoryMediaMapper mediaMapper;
+    /**
+     * 珍藏时光胶囊持久层，对应表：fm_time_capsule。
+     */
     private final TimeCapsuleMapper capsuleMapper;
 
+    /**
+     * 初始化 FamilyService 的依赖。
+     * @param f 家庭空间持久层，对应表：fm_family
+     * @param m 家庭成员关系持久层，对应表：fm_family_member
+     * @param u 用户账号持久层，对应表：fm_user
+     * @param i 家庭邀请码持久层，对应表：fm_invite_code
+     * @param mm 家庭记忆持久层，对应表：fm_memory
+     * @param media 记忆图片与视频持久层，对应表：fm_memory_media
+     * @param c 珍藏时光胶囊持久层，对应表：fm_time_capsule
+     */
     public FamilyService(FamilyMapper f, FamilyMemberMapper m, UserMapper u, InviteCodeMapper i, MemoryMapper mm,
                          MemoryMediaMapper media, TimeCapsuleMapper c) {
         familyMapper = f;
@@ -52,6 +86,12 @@ public class FamilyService {
         capsuleMapper = c;
     }
 
+    /**
+     * 校验当前用户属于指定家庭。
+     * @param familyId 家庭ID，来源表：fm_family.id
+     * @param userId 当前用户ID，来源表：fm_user.id
+     * @return 当前家庭成员关系，来源表：fm_family_member
+     */
     public FamilyMember requireMember(Long familyId, Long userId) {
         FamilyMember member =
                 memberMapper.selectOne(new LambdaQueryWrapper<FamilyMember>().eq(FamilyMember::getFamilyId, familyId).eq(FamilyMember::getUserId, userId));
@@ -59,6 +99,12 @@ public class FamilyService {
         return member;
     }
 
+    /**
+     * 创建家庭并将创建者加入为管理员。
+     * @param req 家庭空间创建请求
+     * @param userId 当前用户ID，来源表：fm_user.id
+     * @return 业务响应字段，逐字段中文说明见响应组装处
+     */
     @Transactional
     public Map<String, Object> create(FamilyRequest req, Long userId) {
         Family family = new Family();
@@ -86,6 +132,11 @@ public class FamilyService {
         return detail(family.getId(), userId);
     }
 
+    /**
+     * 查询当前用户所属家庭列表。
+     * @param userId 当前用户ID，来源表：fm_user.id
+     * @return 业务响应字段，逐字段中文说明见响应组装处
+     */
     public List<Map<String, Object>> list(Long userId) {
         List<Map<String, Object>> result = new ArrayList<>();
         for (FamilyMember member :
@@ -95,6 +146,12 @@ public class FamilyService {
         return result;
     }
 
+    /**
+     * 查询家庭资料和有效内容数量。
+     * @param familyId 家庭ID，来源表：fm_family.id
+     * @param userId 当前用户ID，来源表：fm_user.id
+     * @return 业务响应字段，逐字段中文说明见响应组装处
+     */
     public Map<String, Object> detail(Long familyId, Long userId) {
         requireMember(familyId, userId);
         Family family = familyMapper.selectById(familyId);
@@ -116,20 +173,36 @@ public class FamilyService {
                 capsuleMapper.selectCount(new LambdaQueryWrapper<TimeCapsule>().eq(TimeCapsule::getFamilyId,
                         familyId).eq(TimeCapsule::getIsOpened, 0));
         Map<String, Object> map = new LinkedHashMap<>();
+        // 返回字段 id：记录ID，来源表：fm_family.id。
         map.put("id", family.getId());
+        // 返回字段 name：家庭名称。
         map.put("name", family.getName());
+        // 返回字段 description：家庭介绍。
         map.put("description", family.getDescription());
+        // 返回字段 coverUrl：封面资源地址。
         map.put("coverUrl", family.getCoverUrl());
+        // 返回字段 createdAt：业务记录创建时间。
         map.put("createdAt", family.getCreatedAt());
+        // 返回字段 memberCount：有效家庭成员数量。
         map.put("memberCount", memberCount);
+        // 返回字段 memoryCount：有效记忆数量。
         map.put("memoryCount", memoryCount);
+        // 返回字段 photoCount：图片类型媒体数量。
         map.put("photoCount", photoCount);
+        // 返回字段 capsuleCount：有效珍藏数量。
         map.put("capsuleCount", capsuleCount);
+        // 返回字段 recordDays：家庭建立至今天数，建立当天计为1。
         map.put("recordDays", family.getCreatedAt() == null ? 0 :
                 ChronoUnit.DAYS.between(family.getCreatedAt().toLocalDate(), LocalDate.now()) + 1);
         return map;
     }
 
+    /**
+     * 查询家庭成员称呼、角色及发布数量。
+     * @param familyId 家庭ID，来源表：fm_family.id
+     * @param userId 当前用户ID，来源表：fm_user.id
+     * @return 业务响应字段，逐字段中文说明见响应组装处
+     */
     public List<Map<String, Object>> members(Long familyId, Long userId) {
         requireMember(familyId, userId);
         List<Map<String, Object>> result = new ArrayList<>();
@@ -138,13 +211,21 @@ public class FamilyService {
                         familyId).orderByAsc(FamilyMember::getJoinedAt))) {
             User user = userMapper.selectById(member.getUserId());
             Map<String, Object> map = new LinkedHashMap<>();
+            // 返回字段 id：记录ID，来源表：fm_family_member.id。
             map.put("id", member.getId());
+            // 返回字段 userId：用户ID，来源表：fm_user.id。
             map.put("userId", member.getUserId());
+            // 返回字段 displayName：家庭内称呼。
             map.put("displayName", member.getDisplayName());
+            // 返回字段 role：家庭角色名称，自由文本。
             map.put("role", member.getRole());
+            // 返回字段 color：成员主题色，peach桃色，sky天蓝，amber琥珀，emerald翠绿，可扩展。
             map.put("color", member.getColor());
+            // 返回字段 admin：管理员标志，true管理员，false普通成员。
             map.put("admin", member.getIsAdmin() == 1);
+            // 返回字段 avatar：用户头像资源地址。
             map.put("avatar", user == null ? null : user.getAvatar());
+            // 返回字段 memoryCount：有效记忆数量。
             map.put("memoryCount", memoryMapper.selectCount(new LambdaQueryWrapper<Memory>().eq(Memory::getFamilyId,
                     familyId).eq(Memory::getAuthorId, member.getUserId())));
             result.add(map);
@@ -152,6 +233,13 @@ public class FamilyService {
         return result;
     }
 
+    /**
+     * 仅允许家庭管理员生成有限期及使用次数的邀请码。
+     * @param familyId 家庭ID，来源表：fm_family.id
+     * @param req 家庭邀请码生成参数
+     * @param userId 当前用户ID，来源表：fm_user.id
+     * @return 业务响应字段，逐字段中文说明见响应组装处
+     */
     public Map<String, Object> invite(Long familyId, InviteRequest req, Long userId) {
         FamilyMember member = requireMember(familyId, userId);
         if (member.getIsAdmin() != 1) throw BusinessException.forbidden("只有管理员可以邀请成员");
@@ -166,12 +254,21 @@ public class FamilyService {
         code.setCreatedAt(LocalDateTime.now());
         inviteMapper.insert(code);
         Map<String, Object> map = new LinkedHashMap<>();
+        // 返回字段 code：家庭邀请码，来源表：fm_invite_code.code。
         map.put("code", code.getCode());
+        // 返回字段 expireAt：邀请码到期时间。
         map.put("expireAt", code.getExpireAt());
+        // 返回字段 maxUses：邀请码允许使用次数。
         map.put("maxUses", code.getMaxUses());
         return map;
     }
 
+    /**
+     * 校验邀请码有效性并加入家庭。
+     * @param req 使用邀请码加入家庭的请求
+     * @param userId 当前用户ID，来源表：fm_user.id
+     * @return 业务响应字段，逐字段中文说明见响应组装处
+     */
     @Transactional
     public Map<String, Object> join(JoinFamilyRequest req, Long userId) {
         InviteCode code = inviteMapper.selectOne(new LambdaQueryWrapper<InviteCode>().eq(InviteCode::getCode,
@@ -201,6 +298,10 @@ public class FamilyService {
         return detail(code.getFamilyId(), userId);
     }
 
+    /**
+     * 生成8位家庭邀请码。
+     * @return 随机8位邀请码字符串
+     */
     private String randomCode() {
         String chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
         StringBuilder s = new StringBuilder();

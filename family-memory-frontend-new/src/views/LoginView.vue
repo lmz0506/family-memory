@@ -58,9 +58,9 @@ async function submit() {
             v-model="form.nickname" required
             class="mt-2 w-full rounded-2xl border border-stone-200 bg-white px-4 py-3.5 font-normal outline-none focus:border-peach-300"
             placeholder="家人怎么称呼你"/></label><label class="block text-xs font-bold text-stone-500">用户名<input
-            v-model="form.username" required
+            v-model="form.username" autocomplete="username" required
             class="mt-2 w-full rounded-2xl border border-stone-200 bg-white px-4 py-3.5 font-normal outline-none focus:border-peach-300"/></label><label
-            class="block text-xs font-bold text-stone-500">密码<input v-model="form.password" required type="password"
+            class="block text-xs font-bold text-stone-500">密码<input v-model="form.password" :autocomplete="mode==='login'?'current-password':'new-password'" required type="password"
                                                                       class="mt-2 w-full rounded-2xl border border-stone-200 bg-white px-4 py-3.5 font-normal outline-none focus:border-peach-300"/></label>
           <p v-if="error" class="rounded-xl bg-red-50 px-3 py-2 text-xs text-red-600">{{ error }}</p>
           <button :disabled="loading"

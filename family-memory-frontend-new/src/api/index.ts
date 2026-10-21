@@ -1,4 +1,5 @@
 import http from './http'
+import type {UniverseOverview,UniversePage,UniverseBatch,UniverseSourceType} from '@/types'
 import type {Capsule, Comment as MemoryComment, Family, FamilyMember, FamilyMilestone, FamilyMilestonePayload, Memory, PageData, TimelineMemoryStar, TimelineYearSummary, User} from '@/types'
 
 export const authApi = {
@@ -53,10 +54,20 @@ export const milestoneApi = {
     remove: (id: number) => http.delete(`/milestones/${id}`)
 }
 export const uploadApi = {
-    file: async (file: File, category = 'memory') => {
+    file: async (file: File, category = 'memory', progress?: (percent: number) => void) => {
         const form = new FormData();
         form.append('file', file);
         form.append('category', category);
-        return http.post<any, { url: string }>('/uploads', form)
+        return http.post<any, { url: string }>('/uploads', form, {
+            onUploadProgress: event => { if (event.total) progress?.(Math.min(99, Math.round(event.loaded / event.total * 100))) }
+        })
     }
+}
+
+/** 星海专用轻量接口：概要只取计数，日期列表和搜索均有界分页。 */
+export const universeApi = {
+    year: (familyId:number,year:number,afterId=0,size=120,signal?:AbortSignal) => http.get<any,UniverseBatch>(`/families/${familyId}/universe/year`,{params:{year,afterId,size},signal}),
+    overview: (familyId:number, signal?:AbortSignal) => http.get<any,UniverseOverview>(`/families/${familyId}/universe/overview`,{signal}),
+    day: (familyId:number,date:string,page=1,size=24,signal?:AbortSignal) => http.get<any,UniversePage>(`/families/${familyId}/universe/day`,{params:{date,page,size},signal}),
+    search: (familyId:number,keyword:string,sourceType?:UniverseSourceType,page=1,size=24,signal?:AbortSignal) => http.get<any,UniversePage>(`/families/${familyId}/universe/search`,{params:{keyword,sourceType,page,size},signal})
 }
