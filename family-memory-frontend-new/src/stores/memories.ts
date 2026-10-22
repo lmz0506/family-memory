@@ -9,16 +9,19 @@ export const useMemoryStore = defineStore('memories', () => {
     const years = ref<number[]>([]);
     const total = ref(0);
     const loading = ref(false);
+    let requestVersion=0;
 
     async function load(familyId: number, params: Record<string, unknown> = {}, append = false) {
+        const version=++requestVersion;
         loading.value = true;
         try {
             const data = await memoryApi.list(familyId, {page: 1, size: 50, ...params});
+            if(version!==requestVersion)return data;
             items.value = append ? [...items.value, ...data.list] : data.list;
             total.value = data.total;
             return data
         } finally {
-            loading.value = false
+            if(version===requestVersion)loading.value = false
         }
     }
 

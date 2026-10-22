@@ -1,6 +1,9 @@
 package com.familymemory;
 
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
+import com.baomidou.mybatisplus.annotation.DbType;
+import com.baomidou.mybatisplus.extension.plugins.MybatisPlusInterceptor;
+import com.baomidou.mybatisplus.extension.plugins.inner.PaginationInnerInterceptor;
 import com.baomidou.mybatisplus.extension.spring.MybatisSqlSessionFactoryBean;
 import com.familymemory.dto.CapsuleRequest;
 import com.familymemory.dto.MemoryRequest;
@@ -57,7 +60,11 @@ class UniverseTransactionTest {
         @Bean SqlSessionFactory sqlSessionFactory(DataSource source) throws Exception {
             MybatisSqlSessionFactoryBean factory = new MybatisSqlSessionFactoryBean(); factory.setDataSource(source);
             MybatisConfiguration configuration = new MybatisConfiguration(); configuration.setMapUnderscoreToCamelCase(true);
-            factory.setConfiguration(configuration); return factory.getObject();
+            factory.setConfiguration(configuration);
+            MybatisPlusInterceptor pagination = new MybatisPlusInterceptor();
+            pagination.addInnerInterceptor(new PaginationInnerInterceptor(DbType.H2));
+            factory.setPlugins(pagination);
+            return factory.getObject();
         }
         /**
          * 创建仅允许测试家庭与用户的权限替身。
@@ -165,9 +172,35 @@ class UniverseTransactionTest {
         assertEquals("年末", second.getItems().get(0).getTitle()); assertFalse(second.isHasMore());
         assertEquals("CAPSULE", second.getItems().get(0).getSourceType());
     }
-    /**
-     * 创建用于验证历史日期的记忆请求。
-     * @return 测试对象或测试依赖
-     */
+    /** 标题关键词、年份和作者都在数据库分页前过滤，正文/地点/标签不参与关键词搜索。 */
+    @Test void listSearchesTitleOnlyAndCombinesAuthorYearAndPagination() {
+        jdbc.update("INSERT INTO fm_user(id,username,nickname,status,deleted) VALUES(3,'other','另一位家人',1,0)");
+        jdbc.update("INSERT INTO fm_memory(id,family_id,author_id,title,content,location,memory_date,memory_year,likes_count,comments_count,deleted) VALUES"
+                + "(101,1,2,'第一场晚霞','正文','湖边','2026-01-01',2026,0,0,0),"
+                + "(102,1,2,'第二场晚霞','正文','湖边','2026-02-01',2026,0,0,0),"
+                + "(103,1,3,'另一位的晚霞','正文','湖边','2026-03-01',2026,0,0,0),"
+                + "(104,2,2,'别家晚霞','正文','湖边','2026-04-01',2026,0,0,0),"
+                + "(105,1,2,'删除的晚霞','正文','湖边','2026-05-01',2026,0,0,1),"
+                + "(106,1,2,'正文命中','晚霞','湖边','2026-06-01',2026,0,0,0),"
+                + "(107,1,2,'地点命中','正文','晚霞','2026-07-01',2026,0,0,0),"
+                + "(108,1,2,'去年的晚霞','正文','湖边','2025-08-01',2025,0,0,0),"
+                + "(109,1,2,'标签命中','正文','湖边','2026-09-01',2026,0,0,0)");
+        jdbc.update("INSERT INTO fm_memory_tag(memory_id,tag_name) VALUES(109,'晚霞')");
+        Map<String,Object> all=memories.list(1L,2L,1,12,null,"晚霞");
+        assertEquals(4L,((Number)all.get("total")).longValue());
+        Map<String,Object> first=memories.list(1L,2L,1,1,2026,"晚霞",2L);
+        Map<String,Object> second=memories.list(1L,2L,2,1,2026,"晚霞",2L);
+        assertEquals(2L,((Number)first.get("total")).longValue());
+        java.util.List<?> firstRows=(java.util.List<?>)first.get("list"),secondRows=(java.util.List<?>)second.get("list");
+        assertEquals(1,firstRows.size());assertEquals(1,secondRows.size());
+        assertEquals(102L,((Number)((Map<?,?>)firstRows.get(0)).get("id")).longValue());
+        assertEquals(101L,((Number)((Map<?,?>)secondRows.get(0)).get("id")).longValue());
+        assertEquals(1L,((Number)memories.list(1L,2L,1,12,2026,"晚霞",3L).get("total")).longValue());
+        assertEquals(0L,((Number)memories.list(1L,2L,1,12,2026,"晚霞",999L).get("total")).longValue());
+        assertEquals(5L,((Number)memories.list(1L,2L,1,12,2026,null,2L).get("total")).longValue());
+        assertEquals(0L,((Number)memories.list(1L,2L,1,12,2026,"晚霞' OR 1=1 --",2L).get("total")).longValue());
+    }
+
+    /** 创建用于验证历史日期的记忆请求。 */
     private MemoryRequest memoryRequest() { MemoryRequest request = new MemoryRequest(); request.setTitle("历史记忆"); request.setMemoryDate(LocalDate.of(2020, 2, 29)); return request; }
 }

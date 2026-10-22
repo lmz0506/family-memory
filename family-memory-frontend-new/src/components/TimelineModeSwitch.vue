@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import {Images, Orbit} from 'lucide-vue-next'
 import {nextTick} from 'vue'
-const props=withDefaults(defineProps<{modelValue:string;theme?:'dark'|'light'}>(),{theme:'light'})
+const props=withDefaults(defineProps<{modelValue:string;theme?:'dark'|'light'}>(),{theme:'dark'})
 const emit=defineEmits<{'update:modelValue':[value:string]}>()
-const options=[{value:'stars',label:'星海',icon:Orbit},{value:'classic',label:'相册',icon:Images}]
+const options=[{value:'stars',label:'星海',icon:Orbit},{value:'classic',label:'时间列表',icon:Images}]
 async function navigate(event:KeyboardEvent,index:number){
   if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return
   event.preventDefault()
@@ -21,12 +21,12 @@ async function navigate(event:KeyboardEvent,index:number){
   </div>
 </template>
 <style scoped>
-.timeline-mode-switch{display:flex;gap:3px;padding:3px;border-radius:11px;background:#ede7df;color:#766b60}
+.timeline-mode-switch{display:flex;gap:3px;padding:3px;border-radius:11px;background:var(--ux-surface);color:var(--ux-ink-2)}
 button{display:flex;align-items:center;justify-content:center;gap:6px;min-width:72px;height:33px;padding:0 12px;border:1px solid transparent;border-radius:8px;font-size:12px;font-weight:550;transition:background .18s,color .18s,border-color .18s}
-button[aria-pressed=true]{background:#fff;color:#46382b;border-color:#d8cabb;box-shadow:0 1px 4px #49321d0a}
+button[aria-pressed=true]{background:var(--ux-accent-soft);color:var(--ux-ink);border-color:var(--ux-line-2);box-shadow:0 1px 4px #49321d0a}
 button:focus-visible{outline:2px solid #c79b64;outline-offset:2px}
-[data-theme=dark]{background:transparent;color:#a5b5cd}
-[data-theme=dark] button[aria-pressed=true]{background:#24364d;color:#eef5ff;border-color:#92b4dd4d;box-shadow:none}
-[data-theme=dark] button:hover{color:#fff;background:#25374a80}
+[data-theme=dark]{background:transparent;color:var(--ux-ink-2)}
+[data-theme=dark] button[aria-pressed=true]{background:var(--ux-accent-soft);color:var(--ux-ink);border-color:var(--ux-line-2);box-shadow:none}
+[data-theme=dark] button:hover{color:#fff;background:var(--ux-surface-2)}
 @media(prefers-reduced-motion:reduce){button{transition:none}}
 </style>

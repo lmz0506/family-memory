@@ -43,15 +43,17 @@ public class MemoryController {
      * @param page 页码，从1开始
      * @param size 请求分页大小，服务端限制最大值
      * @param year 目标年份
-     * @param keyword 搜索关键词，空值表示不限制关键词
+     * @param keyword 标题模糊搜索关键词，空值表示不限制标题
+     * @param authorId 作者用户ID，来源表：fm_user.id；空值表示所有作者
      * @return 业务响应字段，逐字段中文说明见响应组装处
      */
     @GetMapping("/families/{familyId}/memories")
     public ApiResult<Map<String, Object>> list(@PathVariable Long familyId,
                                                @RequestParam(defaultValue = "1") int page,
                                                @RequestParam(defaultValue = "12") int size, @RequestParam(required =
-                    false) Integer year, @RequestParam(required = false) String keyword) {
-        return ApiResult.ok(service.list(familyId, UserContext.require(), page, size, year, keyword));
+                    false) Integer year, @RequestParam(required = false) String keyword,
+                                               @RequestParam(required = false) Long authorId) {
+        return ApiResult.ok(service.list(familyId, UserContext.require(), page, size, year, keyword, authorId));
     }
 
     /**

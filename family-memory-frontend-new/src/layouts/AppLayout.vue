@@ -1,165 +1,62 @@
 <script setup lang="ts">
-import {computed, onBeforeUnmount, onMounted, ref} from 'vue'
-import {useRoute, useRouter} from 'vue-router'
-import {
-  CalendarDays, Heart, Home, LockKeyhole, LogOut, PanelLeftClose, PanelLeftOpen,
-  Plus, Search, Settings, Sparkles, Users
-} from 'lucide-vue-next'
+import {computed,nextTick,onBeforeUnmount,onMounted,ref,watch} from 'vue'
+import {useRoute,useRouter} from 'vue-router'
+import {Archive,CalendarDays,ChevronDown,Images,LockKeyhole,LogOut,Orbit,Plus,Sparkles,Users} from 'lucide-vue-next'
 import {useAuthStore} from '@/stores/auth'
 import {useFamilyStore} from '@/stores/family'
-import {useMemoryStore} from '@/stores/memories'
 import ComposerModal from '@/components/ComposerModal.vue'
+import CapsuleComposerModal from '@/components/CapsuleComposerModal.vue'
+import {skyEditorOpen} from '@/composables/useSkyEditor'
+import {invalidateViewData} from '@/composables/viewState'
+import {notify} from '@/composables/useToast'
+import '@/styles/star-home.css'
+import '@/styles/universe-workspace.css'
 
-const route = useRoute()
-const router = useRouter()
-const auth = useAuthStore()
-const family = useFamilyStore()
-const memories = useMemoryStore()
-const composer = ref(false)
-const mobileMenu = ref(false)
-const collapsed = ref(false)
-const search = ref('')
-const nav = [
-  {name: 'home', label: '首页', icon: Home},
-  {name: 'timeline', label: '时光轴', icon: CalendarDays},
-  {name: 'vault', label: '珍藏', icon: LockKeyhole},
-  {name: 'family', label: '家人', icon: Users}
-]
-const detailPage = computed(() => route.name === 'memory-detail' || route.name === 'capsule-detail')
-const initial = computed(() => auth.user?.nickname?.slice(0, 1) || '家')
-const currentDate = computed(() => new Intl.DateTimeFormat('zh-CN', {
-  year: 'numeric', month: 'long', day: 'numeric', weekday: 'long'
-}).format(new Date()))
-
-function openComposer() {composer.value = true}
-onBeforeUnmount(() => window.removeEventListener('family-memory-compose', openComposer))
-onMounted(async () => {
-  window.addEventListener('family-memory-compose', openComposer)
-  await family.load()
-  if (!family.current && route.name !== 'welcome') router.replace('/welcome')
-})
-
-function logout() {
-  auth.logout()
-  router.replace('/login')
+const route=useRoute(),router=useRouter(),auth=useAuthStore(),family=useFamilyStore()
+const composer=ref(false),capsuleComposer=ref(false),accountOpen=ref(false),familyError=ref('')
+const menuTrigger=ref<HTMLButtonElement>()
+async function openMenu(){accountOpen.value=true;await nextTick();document.querySelector<HTMLAnchorElement>('#sky-page-menu a')?.focus()}
+function menuNavigate(event:KeyboardEvent){if(!['ArrowDown','ArrowUp','Home','End'].includes(event.key))return;event.preventDefault();const items=Array.from(document.querySelectorAll<HTMLElement>('#sky-page-menu a,#sky-page-menu button')),index=items.indexOf(document.activeElement as HTMLElement),next=event.key==='Home'?0:event.key==='End'?items.length-1:(index+(event.key==='ArrowDown'?1:-1)+items.length)%items.length;items[next]?.focus()}
+const nav=[{name:'home',label:'星海',icon:Orbit},{name:'album',label:'回忆',icon:Images},{name:'vault',label:'珍藏',icon:LockKeyhole},{name:'family',label:'家人',icon:Users}]
+const starHome=computed(()=>route.name==='home')
+watch([starHome,composer,capsuleComposer],()=>{skyEditorOpen.value=composer.value||capsuleComposer.value},{immediate:true})
+onBeforeUnmount(()=>{skyEditorOpen.value=false})
+const activeName=computed(()=>route.name==='memory-detail'?(route.query.from==='home'?'home':'album'):route.name==='capsule-detail'?(route.query.from==='home'||route.query.from==='universe'?'home':'vault'):route.name)
+function openComposer(){capsuleComposer.value=false;composer.value=true}
+function openCapsule(){composer.value=false;capsuleComposer.value=true}
+function logout(){auth.logout();router.replace('/login')}
+function keydown(event:KeyboardEvent){if(event.key==='Escape'&&accountOpen.value){accountOpen.value=false;nextTick(()=>menuTrigger.value?.focus());event.preventDefault();event.stopImmediatePropagation()}}
+async function loadFamily(){
+  familyError.value=''
+  try{await family.load();if(!family.current&&route.name!=='welcome')await router.replace('/welcome')}
+  catch(e){familyError.value=(e as Error).message}
 }
-
-function submitSearch() {
-  if (!search.value.trim()) return
-  router.push({name: 'timeline', query: {keyword: search.value.trim()}})
+async function handleCreated(kind:'memory'|'capsule'){
+  invalidateViewData(kind==='memory'?'album:':'vault:')
+  window.dispatchEvent(new Event(kind==='memory'?'family-memory-created':'family-capsule-created'))
+  try{await family.refresh()}catch{notify('内容已保存，家庭概览暂未更新','info')}
 }
-
-async function handleCreated() {
-  await family.refresh()
-  if (!family.current) return
-  if (route.name === 'home') window.dispatchEvent(new Event('family-memory-created'))
-  else await memories.load(family.current.id)
-}
+watch(()=>route.fullPath,()=>{accountOpen.value=false},{immediate:true})
+onMounted(()=>{window.addEventListener('family-memory-compose',openComposer);window.addEventListener('family-capsule-compose',openCapsule);document.addEventListener('keydown',keydown,true);void loadFamily()})
+onBeforeUnmount(()=>{window.removeEventListener('family-memory-compose',openComposer);window.removeEventListener('family-capsule-compose',openCapsule);document.removeEventListener('keydown',keydown,true)})
 </script>
-
 <template>
-  <div class="flex h-[100dvh] w-full overflow-hidden bg-[#fafaf7] text-[#332e2b]">
-    <aside class="relative z-30 hidden shrink-0 flex-col justify-between overflow-hidden border-r border-warm-100/80 bg-white/90 transition-all duration-300 lg:flex"
-           :class="collapsed ? 'w-[76px]' : 'w-64'">
-      <div>
-        <div class="flex items-center gap-3.5 p-6">
-          <div class="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-gradient-to-tr from-brand-coral to-brand-peach text-white shadow-md shadow-brand-coral/20">
-            <Sparkles :size="20"/>
-          </div>
-          <div v-if="!collapsed" class="whitespace-nowrap">
-            <h1 class="text-lg font-bold leading-none tracking-tight text-warm-900">拾光</h1>
-            <span class="mt-1 block text-[10px] font-semibold uppercase tracking-wider text-warm-400">Family Memory</span>
-          </div>
-        </div>
-
-        <nav class="mt-2 space-y-1 px-3">
-          <RouterLink v-for="item in nav" :key="item.name" :to="{name:item.name}"
-                      class="flex items-center gap-3.5 rounded-xl px-4 py-3 text-sm font-medium transition-all"
-                      :title="collapsed ? item.label : undefined"
-                      :class="route.name === item.name ? 'bg-brand-coral-light/80 text-brand-coral' : 'text-warm-800 hover:bg-warm-50 hover:text-brand-coral'">
-            <component :is="item.icon" :size="20" class="shrink-0" :class="route.name === item.name ? '' : 'text-warm-400'"/>
-            <span v-if="!collapsed" class="whitespace-nowrap">{{ item.label }}</span>
-          </RouterLink>
-        </nav>
-      </div>
-
-      <div class="space-y-3 p-4">
-        <div v-if="!detailPage" class="relative overflow-hidden rounded-2xl bg-gradient-to-br from-warm-900 to-warm-800 p-4 text-white shadow-lg shadow-warm-900/10">
-          <div class="absolute -bottom-3 -right-3 h-20 w-20 rounded-full bg-brand-coral/20 blur-xl"></div>
-          <div class="relative z-10">
-            <div v-if="!collapsed">
-              <div class="mb-1 flex items-center gap-2 text-xs font-medium text-brand-peach"><Heart :size="14" fill="currentColor"/>让记忆有迹可循</div>
-              <p class="mb-3 text-xs leading-relaxed text-warm-200">今天也记录一件值得记住的小事吧。</p>
-            </div>
-            <button @click="composer=true" class="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-coral px-3 py-2.5 text-xs font-semibold text-white shadow-md transition hover:bg-brand-coral-hover active:scale-[.98]">
-              <Plus :size="16"/><span v-if="!collapsed" class="whitespace-nowrap">添加记忆</span>
-            </button>
-          </div>
-        </div>
-
-        <div class="relative">
-          <button @click="mobileMenu=!mobileMenu" aria-label="账号菜单" :aria-expanded="mobileMenu" class="flex w-full items-center justify-between rounded-xl p-2.5 text-left transition hover:bg-warm-100/50">
-            <div class="flex min-w-0 items-center gap-3">
-              <div class="relative grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand-coral-light text-xs font-bold text-brand-coral ring-2 ring-warm-100">
-                {{ initial }}<span class="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white"></span>
-              </div>
-              <div v-if="!collapsed" class="min-w-0 whitespace-nowrap">
-                <p class="truncate text-xs font-semibold text-warm-900">{{ auth.user?.nickname || '家庭成员' }}</p>
-                <p class="truncate text-[10px] text-warm-400">{{ family.current?.name || '温馨小家' }}</p>
-              </div>
-            </div>
-            <Settings v-if="!collapsed" :size="16" class="text-warm-400"/>
-          </button>
-          <div v-if="mobileMenu" class="absolute bottom-full left-0 z-50 mb-2 w-full min-w-40 rounded-2xl border border-warm-100 bg-white/95 p-2 shadow-xl backdrop-blur-md">
-            <button @click="logout" class="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium text-rose-600 hover:bg-rose-50"><LogOut :size="14"/>退出登录</button>
-          </div>
-        </div>
-      </div>
-    </aside>
-
-    <main class="paper relative flex min-w-0 flex-1 flex-col overflow-hidden">
-      <header class="z-20 flex h-16 shrink-0 items-center justify-between border-b border-warm-100/60 bg-white/60 px-4 backdrop-blur-md sm:px-6">
-        <div class="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
-          <button @click="collapsed=!collapsed" class="hidden rounded-xl p-2 text-warm-500 transition hover:bg-warm-100/60 hover:text-warm-800 lg:grid" title="展开/收起菜单">
-            <PanelLeftOpen v-if="collapsed" :size="20"/><PanelLeftClose v-else :size="20"/>
-          </button>
-          <div class="flex shrink-0 items-center gap-2 lg:hidden">
-            <div class="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-tr from-brand-coral to-brand-peach text-white"><Sparkles :size="18"/></div>
-            <span class="hidden whitespace-nowrap font-bold text-warm-900 sm:inline">拾光</span>
-          </div>
-          <form @submit.prevent="submitSearch" class="relative w-full max-w-xl">
-            <Search :size="16" class="absolute left-3.5 top-1/2 -translate-y-1/2 text-warm-400"/>
-            <input v-model="search" class="w-full rounded-full border border-warm-100 bg-warm-50/80 py-2.5 pl-10 pr-4 text-sm text-warm-800 outline-none transition placeholder:text-warm-400 focus:border-brand-coral focus:ring-2 focus:ring-brand-coral/30"
-                   aria-label="搜索家庭记忆" placeholder="寻找照片、故事与家人的回忆"/>
-          </form>
-        </div>
-        <div class="ml-3 flex items-center gap-3">
-          <button @click="mobileMenu=!mobileMenu" aria-label="账号菜单" :aria-expanded="mobileMenu" class="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brand-coral-light text-sm font-bold text-brand-coral lg:hidden">{{ initial }}</button>
-          <div class="hidden items-center gap-2 rounded-full bg-warm-100/50 px-3 py-1.5 text-xs font-medium text-warm-800 xl:flex"><CalendarDays :size="14" class="text-brand-coral"/>{{ currentDate }}</div>
-        </div>
-        <div v-if="mobileMenu" class="absolute right-4 top-16 z-50 w-56 rounded-2xl border border-warm-200 bg-white p-3 shadow-soft-lg lg:hidden">
-          <p class="px-2 py-2 text-sm font-semibold">{{ auth.user?.nickname }} · {{ family.current?.name }}</p>
-          <button @click="logout" class="flex min-h-11 w-full items-center gap-2 rounded-xl px-3 text-sm text-rose-600 hover:bg-rose-50"><LogOut :size="16"/>退出登录</button>
-        </div>
-      </header>
-
-      <div data-app-scroll class="flex-1 overflow-y-auto overscroll-y-contain p-4 pb-28 sm:p-6 sm:pb-28 md:p-8 lg:pb-8">
-        <RouterView/>
-      </div>
+  <div class="fm-shell" :class="{'fm-shell-star':starHome,'fm-shell-content':!starHome}">
+    <a href="#main-content" class="fm-skip">跳到主要内容</a>
+    <div class="sky-app-menu">
+      <button ref="menuTrigger" class="sky-menu-trigger" @keydown.down.prevent="openMenu" aria-label="拾光页面菜单" :aria-expanded="accountOpen" aria-controls="sky-page-menu" @click="accountOpen=!accountOpen"><Sparkles :size="23"/><span><b>拾光</b><small>{{family.current?.name||'一家人的星海'}}</small></span><ChevronDown :size="14"/></button>
+      <template v-if="accountOpen"><button class="fm-account-dismiss" tabindex="-1" aria-label="关闭页面菜单" @click="accountOpen=false"></button><nav id="sky-page-menu" class="sky-page-menu" @keydown="menuNavigate" aria-label="页面与账号"><p>翻开我们的小世界</p><RouterLink v-for="item in nav" :key="item.name" :to="{name:item.name}" :aria-current="activeName===item.name?'page':undefined" @click="accountOpen=false"><component :is="item.icon" :size="17"/>{{item.label}}</RouterLink><div class="sky-menu-create"><button @click="accountOpen=false;openComposer()"><Plus :size="16"/>记录一段记忆</button><button @click="accountOpen=false;openCapsule()"><Archive :size="16"/>封存一份珍藏</button></div><div class="sky-menu-account"><span>{{auth.user?.nickname||'家庭成员'}}</span><button @click="logout"><LogOut :size="15"/>退出登录</button></div></nav></template>
+    </div>
+    <main id="main-content" data-app-scroll class="fm-content" :class="{'fm-content-sky':starHome,'sky-content':!starHome}" tabindex="-1">
+      <div v-if="familyError" class="fm-family-error" role="alert"><span>{{familyError}}</span><button @click="loadFamily">重新加载家庭</button></div>
+      <RouterView/>
     </main>
-
-    <button v-if="route.name === 'home'" aria-label="添加记忆" @click="composer=true"
-            class="fixed bottom-[88px] right-5 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-brand-coral text-white shadow-glow transition hover:-translate-y-1 hover:bg-brand-coral-hover lg:hidden">
-      <Plus :size="22"/>
-    </button>
-
-    <nav v-if="!detailPage" class="fixed inset-x-3 bottom-[max(12px,env(safe-area-inset-bottom))] z-40 mx-auto flex h-[68px] max-w-md items-center justify-around rounded-[22px] border border-white/70 bg-white/90 px-2 shadow-2xl backdrop-blur-xl lg:hidden">
-      <RouterLink v-for="item in nav" :key="item.name" :to="{name:item.name}" :aria-label="item.label"
-                  class="flex min-w-[62px] flex-col items-center gap-1 text-xs font-semibold"
-                  :class="route.name===item.name?'text-brand-coral':'text-warm-400'">
-        <span class="grid h-8 w-10 place-items-center rounded-xl" :class="route.name===item.name?'bg-brand-coral-light':''"><component :is="item.icon" :size="19"/></span>{{ item.label }}
-      </RouterLink>
-    </nav>
-    <ComposerModal v-if="family.current" v-model="composer" :family-id="family.current.id" @created="handleCreated"/>
+    <ComposerModal v-if="family.current" :key="`memory-${family.current.id}`" v-model="composer" :family-id="family.current.id" :embedded="true" @created="handleCreated('memory')"/>
+    <CapsuleComposerModal v-if="family.current" :key="`capsule-${family.current.id}`" v-model="capsuleComposer" :family-id="family.current.id" :embedded="true" @created="handleCreated('capsule')"/>
   </div>
 </template>
+
+<style scoped>
+.fm-shell-content{background:var(--sky-ambient-base)}.fm-shell-content>.sky-app-menu{position:absolute;top:20px;left:32px}.fm-shell-content .fm-content{padding:100px 32px 36px;background:var(--sky-ambient);background-color:var(--sky-ambient-base)}.fm-shell-content .sky-app-menu::before{content:"";position:fixed;left:0;right:0;top:0;height:84px;pointer-events:none;background:linear-gradient(#29252df2 25%,#24232cbb 65%,transparent);z-index:-1}.fm-shell-content .sky-menu-trigger{position:relative}.fm-shell-content .sky-page-menu{z-index:60}.fm-shell-content .fm-family-error{background:var(--ux-surface);color:var(--ux-ink-2)}
+@media(max-width:767px){.fm-shell-content>.sky-app-menu{left:19px;top:18px}.fm-shell-content .fm-content{padding:94px 16px calc(24px + env(safe-area-inset-bottom))}}
+</style>

@@ -4,6 +4,7 @@ export default {
     theme: {
         extend: {
             colors: {
+                night: Object.fromEntries(['page','surface','soft','raised','ink','secondary','muted','line','line-strong','action','action-ink','accent','danger','positive'].map(key=>[key,`rgb(var(--sky-${key}) / <alpha-value>)`])),
                 ink: '#3f342f',
                 cream: '#fffaf5',
                 peach: {50: '#fff4f0', 100: '#ffe4dc', 300: '#ffb2a2', 500: '#d85e46', 600: '#bf4c36'},
@@ -13,7 +14,7 @@ export default {
             fontFamily: {
                 display: ['"Noto Serif SC"', '"Songti SC"', 'serif'],
                 serif: ['"Noto Serif SC"', 'Georgia', 'serif'],
-                sans: ['"Plus Jakarta Sans"', '"PingFang SC"', '"Microsoft YaHei"', 'sans-serif']
+                sans: ['-apple-system','BlinkMacSystemFont','"PingFang SC"','"Microsoft YaHei"','sans-serif']
             },
             boxShadow: {
                 soft: '0 8px 30px rgba(180,150,130,.08)',

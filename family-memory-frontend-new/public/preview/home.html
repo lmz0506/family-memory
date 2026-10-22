@@ -1,0 +1,61 @@
+<!-- Lucian UX/UI Prompt #039 · MIT License (c) 2026 Seokwoooo · https://lucianlabs.dev/uxui-prompt/#039 -->
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark"><title>拾光 · 首页设计预览</title>
+  <link rel="stylesheet" href="home.css">
+  <link rel="stylesheet" href="warm-theme.css">
+</head>
+<body>
+<svg class="sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
+<symbol id="sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></symbol>
+<symbol id="home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10H3zM9 20v-7h6v7"/></symbol>
+<symbol id="clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+<symbol id="heart" viewBox="0 0 24 24"><path d="M20.8 4.6c-2.2-2.1-5.7-1.9-7.7.4L12 6.2 10.9 5C8.9 2.7 5.4 2.5 3.2 4.6c-2.4 2.3-2.3 6 .1 8.3L12 21l8.7-8.1c2.4-2.3 2.5-6 .1-8.3Z"/></symbol>
+<symbol id="people" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 5a3 3 0 0 1 0 6m2 3a5 5 0 0 1 3 4v3"/></symbol>
+<symbol id="search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></symbol>
+<symbol id="plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="arrow" viewBox="0 0 24 24"><path d="M4 12h16m-6-6 6 6-6 6"/></symbol>
+<symbol id="image" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8" cy="8" r="1.5"/><path d="m3 17 6-6 4 4 3-3 5 5"/></symbol>
+<symbol id="pin" viewBox="0 0 24 24"><path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 0 1 14 0Z"/><circle cx="12" cy="10" r="2"/></symbol>
+<symbol id="chat" viewBox="0 0 24 24"><path d="M21 11a9 9 0 0 1-9 9 10 10 0 0 1-4-.9L3 21l1.7-5A9 9 0 1 1 21 11Z"/></symbol>
+<symbol id="spark" viewBox="0 0 24 24"><path d="m12 2 2.6 7.4L22 12l-7.4 2.6L12 22l-2.6-7.4L2 12l7.4-2.6Z"/></symbol>
+<symbol id="moon" viewBox="0 0 24 24"><path d="M20 15.4A9 9 0 0 1 8.6 4a9 9 0 1 0 11.4 11.4Z"/></symbol>
+<symbol id="close" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6"/></symbol>
+<symbol id="book" viewBox="0 0 24 24"><path d="M12 5C8 2 3 4 3 4v15s5-2 9 1c4-3 9-1 9-1V4s-5-2-9 1Zm0 0v15"/></symbol>
+<symbol id="chevron" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+</defs></svg>
+<div class="workspace">
+  <header class="topbar album-topbar">
+  <a class="album-brand" href="home.html" aria-label="拾光首页"><span class="brand-mark"><svg><use href="#spark"/></svg></span><span><b>拾光</b><small>林家小院的记忆册</small></span></a>
+  <nav class="album-nav" aria-label="主导航">
+    <a href="home.html" class="active" aria-current="page"><svg class="icon"><use href="#home"/></svg><span>首页</span></a>
+    <button data-info="时光轴"><svg class="icon"><use href="#clock"/></svg><span>时光轴</span></button>
+    <button data-info="珍藏"><svg class="icon"><use href="#heart"/></svg><span>珍藏</span></button>
+    <button data-info="家人"><svg class="icon"><use href="#people"/></svg><span>家人</span></button>
+  </nav>
+  <div class="topbar-actions"><label class="search"><svg class="icon"><use href="#search"/></svg><input id="memory-search" type="search" placeholder="寻找一段回忆…" aria-label="搜索示例回忆"><kbd>⌘ K</kbd></label><button class="icon-button theme-toggle" aria-label="切换深色模式"><svg class="icon"><use href="#moon"/></svg></button><button class="account-entry" data-info="个人资料" aria-label="妈妈的个人资料"><span class="avatar peach">妈</span></button></div>
+</header>
+  <main>
+<section class="greeting home-intro"><div><p class="eyebrow"><svg class="icon"><use href="#sun"/></svg>早上好，妈妈 · 林家小院</p><h1>把日子，一页页留住。</h1><p class="subtitle">照片里的笑，日常里的爱，都在这里慢慢积攒。</p></div><div class="intro-actions"><span><svg class="icon"><use href="#image"/></svg>128 段回忆<span class="intro-dot">·</span>4 位家人</span><button class="primary compose"><svg class="icon"><use href="#plus"/></svg>记录这一刻</button></div></section>
+    <section class="stories" id="stories" aria-labelledby="stories-title"><div class="section-heading"><div><h2 id="stories-title">家里的故事<span>把小事，记成大事。</span></h2></div><span class="story-order">按回忆时间排列</span></div><div class="story-grid" id="story-grid">
+      <article class="story-card" data-kind="photo" data-title="湖边的晚风"><div class="card-photo photo-grid grid-three"><button type="button" class="photo-tile" data-photo-group="lake" data-photo-index="0" aria-label="预览第1张照片"><img src="../assets/images/lake-sunset.jpg" alt="金色夕阳下宁静的湖泊"></button><button type="button" class="photo-tile" data-photo-group="lake" data-photo-index="1" aria-label="预览第2张照片"><img src="../assets/images/family-sunset.jpg" alt="家人在海边一起看夕阳"></button><button type="button" class="photo-tile" data-photo-group="lake" data-photo-index="2" aria-label="预览第3张照片"><img src="../assets/images/child-growing.jpg" alt="阳光下孩子的笑容"></button><span class="photo-tag">生活碎片</span><span class="photo-count"><svg class="icon"><use href="#image"/></svg>3</span></div><div class="card-body"><div class="card-meta"><span><i class="mini-avatar peach">妈</i>妈妈记录</span><time datetime="2026-10-19">10月19日</time></div><button class="story-title" data-story="lake">湖边的晚风</button><p>绕了一点远路，却遇见了今年最温柔的晚霞。原来幸福，就在回家的路上。</p><div class="card-footer"><span><svg class="icon"><use href="#pin"/></svg>东湖绿道</span><div><button class="like" aria-label="喜欢湖边的晚风" aria-pressed="false"><svg class="icon"><use href="#heart"/></svg><span>12</span></button><button data-story="lake" aria-label="查看湖边的晚风的回应"><svg class="icon"><use href="#chat"/></svg>3</button></div></div></div></article>
+      <article class="story-card" data-kind="photo" data-title="又长大了一点点"><div class="card-photo photo-grid grid-four"><button type="button" class="photo-tile" data-photo-group="child" data-photo-index="0" aria-label="预览第1张照片"><img src="../assets/images/child-growing.jpg" alt="阳光下露出灿烂笑容的孩子"></button><button type="button" class="photo-tile" data-photo-group="child" data-photo-index="1" aria-label="预览第2张照片"><img src="../assets/images/birthday-cake.jpg" alt="成长日记里的生日蛋糕"></button><button type="button" class="photo-tile" data-photo-group="child" data-photo-index="2" aria-label="预览第3张照片"><img src="../assets/images/family-sunset.jpg" alt="和家人在一起的夏天"></button><button type="button" class="photo-tile" data-photo-group="child" data-photo-index="3" aria-label="预览第4张照片"><img src="../assets/images/lake-sunset.jpg" alt="一起看过的湖畔夕阳"></button><span class="photo-tag">小满成长</span><span class="photo-count"><svg class="icon"><use href="#image"/></svg>4</span></div><div class="card-body"><div class="card-meta"><span><i class="mini-avatar sage">爸</i>爸爸记录</span><time datetime="2026-10-17">10月17日</time></div><button class="story-title" data-story="child">又长大了一点点</button><p>今天第一次自己系好了鞋带。认真了好久，然后抬头说：“爸爸，我会啦！”</p><div class="card-footer"><span><svg class="icon"><use href="#pin"/></svg>温暖的家</span><div><button class="like" aria-label="喜欢又长大了一点点" aria-pressed="false"><svg class="icon"><use href="#heart"/></svg><span>8</span></button><button data-story="child" aria-label="查看又长大了一点点的回应"><svg class="icon"><use href="#chat"/></svg>2</button></div></div></div></article>
+      <article class="story-card" data-kind="photo" data-title="愿你每一岁，都有爱相伴"><div class="card-photo"><button type="button" class="photo-tile" data-photo-group="birthday" data-photo-index="0" aria-label="预览第1张照片"><img src="../assets/images/birthday-cake.jpg" alt="插着彩色蜡烛的生日蛋糕"></button><span class="photo-tag">值得纪念</span><span class="photo-count"><svg class="icon"><use href="#image"/></svg>1</span></div><div class="card-body"><div class="card-meta"><span><i class="mini-avatar peach">妈</i>妈妈记录</span><time datetime="2026-10-12">10月12日</time></div><button class="story-title" data-story="birthday">愿你每一岁，都有爱相伴</button><p>蜡烛亮起来的时候，你闭上眼睛许了一个很长很长的愿望。生日快乐，我的小朋友。</p><div class="card-footer"><span><svg class="icon"><use href="#pin"/></svg>温暖的家</span><div><button class="like" aria-label="喜欢生日故事" aria-pressed="false"><svg class="icon"><use href="#heart"/></svg><span>16</span></button><button data-story="birthday" aria-label="查看生日故事的回应"><svg class="icon"><use href="#chat"/></svg>6</button></div></div></div></article>
+      <article class="story-card note-card" data-kind="note" data-title="幸福的形状"><div class="note-icon"><svg class="icon"><use href="#book"/></svg></div><span class="note-date">10月8日 · 妈妈的记录</span><button class="story-title" data-story="note">幸福的形状</button><p>下班回家，门还没开，就听见小满喊妈妈。厨房里是爸爸煮的汤，阳台上是刚晒好的衣服。<br><br>好像也没有什么特别的事。可我想，这就是幸福的样子吧。</p><div class="card-meta"><span><i class="mini-avatar peach">妈</i>妈妈记录</span><svg class="icon"><use href="#heart"/></svg></div></article>
+    </div><div class="no-results" hidden>还没有找到这段回忆，换个关键词试试吧。</div><button class="more-stories" id="more">慢慢翻，还有好多故事<svg class="icon"><use href="#arrow"/></svg></button></section>
+    <section class="bottom-panels"><button class="today-panel" data-story="family"><span class="today-image"><img src="../assets/images/family-sunset.jpg" alt="家人一起看海"></span><span><small><svg class="icon"><use href="#clock"/></svg>那年今日</small><b>还记得那个一起看海的夏天吗？</b><em>有些日子，值得再过一遍。</em></span><svg class="icon"><use href="#arrow"/></svg></button><button class="capsule-panel" data-info="时光胶囊"><span class="capsule-symbol"><svg class="icon"><use href="#spark"/></svg></span><span><small>写给未来的我们</small><b>把此刻，寄给以后的某一天。</b><em>封存一颗时光胶囊 <span>↗</span></em></span></button></section>
+    <footer class="page-footer"><span>拾光 · 让爱有迹可循</span><span>静态概念预览 · 内容与统计均为示例</span><span><svg class="icon"><use href="#heart"/></svg>为我们，留住我们。</span></footer>
+  </main>
+</div>
+<nav class="mobile-nav" aria-label="移动导航"><a href="home.html" class="active" aria-current="page"><svg class="icon"><use href="#home"/></svg>首页</a><button data-info="时光轴"><svg class="icon"><use href="#clock"/></svg>时光轴</button><button class="mobile-compose compose" aria-label="记录这一刻"><svg class="icon"><use href="#plus"/></svg></button><button data-info="珍藏"><svg class="icon"><use href="#heart"/></svg>珍藏</button><button data-info="家人"><svg class="icon"><use href="#people"/></svg>家人</button></nav>
+<dialog id="preview-dialog"><button class="dialog-close icon-button" aria-label="关闭弹窗"><svg class="icon"><use href="#close"/></svg></button><div id="dialog-content"></div></dialog>
+<script src="home.js"></script>
+</body></html>
+
+
+
+
+
+

@@ -7,8 +7,8 @@ const router = createRouter({
         {path: '/welcome', name: 'welcome', component: () => import('@/views/WelcomeView.vue'), meta: {auth: true}},
         {
             path: '/', component: () => import('@/layouts/AppLayout.vue'), meta: {auth: true}, children: [
-                {path: '', name: 'home', component: () => import('@/views/HomeView.vue')},
-                {path: 'timeline', name: 'timeline', component: () => import('@/views/TimelineView.vue')},
+                {path: '', name: 'home', component: () => import('@/views/UniverseHomeView.vue')},
+                {path: 'memories', name: 'album', component: () => import('@/views/HomeView.vue')},
                 {path: 'vault', name: 'vault', component: () => import('@/views/VaultView.vue')},
                 {path: 'family', name: 'family', component: () => import('@/views/FamilyView.vue')},
                 {path: 'memories/:id', name: 'memory-detail', component: () => import('@/views/MemoryDetailView.vue')},

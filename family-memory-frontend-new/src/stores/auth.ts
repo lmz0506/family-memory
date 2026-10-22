@@ -1,5 +1,6 @@
 import {defineStore} from 'pinia';
 import {computed, ref} from 'vue';
+import {clearViewStates} from '@/composables/viewState'
 import {authApi} from '@/api';
 import type {User} from '@/types'
 
@@ -13,6 +14,7 @@ export const useAuthStore = defineStore('auth', () => {
         loading.value = true;
         try {
             const data = await authApi.login({username, password});
+            clearViewStates();
             token.value = data.token;
             user.value = data.user;
             localStorage.setItem('family-memory-token', data.token);
@@ -24,6 +26,7 @@ export const useAuthStore = defineStore('auth', () => {
 
     async function register(username: string, password: string, nickname: string) {
         const data = await authApi.register({username, password, nickname});
+        clearViewStates();
         token.value = data.token;
         user.value = data.user;
         localStorage.setItem('family-memory-token', data.token);
@@ -36,6 +39,7 @@ export const useAuthStore = defineStore('auth', () => {
     }
 
     function logout() {
+        clearViewStates();
         token.value = '';
         user.value = null;
         localStorage.removeItem('family-memory-token')

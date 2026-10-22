@@ -49,6 +49,7 @@ export class NebulaVolume {
   private lastWorld=new THREE.Matrix4()
   private dirty=true
   texture=this.target.texture
+  setWarm(warm:boolean){this.mesh.material.uniforms.uWarm.value=warm?1:0;this.dirty=true}
   constructor(private renderer:THREE.WebGLRenderer){
     this.noise=new THREE.Data3DTexture(bakeNoise(),NOISE_SIZE,NOISE_SIZE,NOISE_SIZE)
     this.noise.format=THREE.RGBAFormat
@@ -56,12 +57,12 @@ export class NebulaVolume {
     this.noise.wrapS=this.noise.wrapT=this.noise.wrapR=THREE.RepeatWrapping
     this.noise.generateMipmaps=false;this.noise.unpackAlignment=1;this.noise.needsUpdate=true
     const material=new THREE.ShaderMaterial({
-      uniforms:{uNoise:{value:this.noise},uTime:{value:0},uInverseProjection:{value:new THREE.Matrix4()},uCameraWorld:{value:new THREE.Matrix4()},uWorldInverse:{value:new THREE.Matrix4()},uSteps:{value:48}},
+      uniforms:{uNoise:{value:this.noise},uTime:{value:0},uWarm:{value:0},uInverseProjection:{value:new THREE.Matrix4()},uCameraWorld:{value:new THREE.Matrix4()},uWorldInverse:{value:new THREE.Matrix4()},uSteps:{value:48}},
       depthTest:false,depthWrite:false,toneMapped:false,
       vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=vec4(position.xy,0.0,1.0);}`,
       fragmentShader:`
         precision highp sampler3D;
-        uniform sampler3D uNoise;uniform float uTime;uniform mat4 uInverseProjection;uniform mat4 uCameraWorld;uniform mat4 uWorldInverse;uniform int uSteps;varying vec2 vUv;
+        uniform sampler3D uNoise;uniform float uTime;uniform float uWarm;uniform mat4 uInverseProjection;uniform mat4 uCameraWorld;uniform mat4 uWorldInverse;uniform int uSteps;varying vec2 vUv;
         vec4 noise4(vec3 p){vec3 cell=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return texture(uNoise,(cell+f+.5)/128.0);}
         float hash21(vec2 p){vec3 q=fract(vec3(mod(p,128.0).xy,p.x+p.y)*.1031);q+=dot(q,q.yzx+33.33);return fract((q.x+q.y)*q.z);}
         vec2 boxIntersection(vec3 ro,vec3 rd){vec3 a=(vec3(-370.0,-190.0,-310.0)-ro)/rd;vec3 b=(vec3(370.0,190.0,110.0)-ro)/rd;vec3 lo=min(a,b),hi=max(a,b);return vec2(max(max(lo.x,lo.y),lo.z),min(min(hi.x,hi.y),hi.z));}
@@ -89,6 +90,7 @@ export class NebulaVolume {
           color=mix(color,copper,smoothstep(.72,.93,tint)*.5);
           float birth=exp(-dot((p-vec3(-90.0,-10.0,-80.0))/vec3(75.0,58.0,90.0),(p-vec3(-90.0,-10.0,-80.0))/vec3(75.0,58.0,90.0)));
           color=mix(color,copper,birth*.65);
+          color=mix(color,mix(vec3(.12,.065,.14),copper*1.4,hue),uWarm*.75);
           color*=.25+edge*2.05;
           return vec4(color,density);
         }

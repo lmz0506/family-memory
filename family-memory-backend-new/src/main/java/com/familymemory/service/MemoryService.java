@@ -98,15 +98,21 @@ public class MemoryService {
      * @param page 页码，从1开始
      * @param size 请求分页大小，服务端限制最大值
      * @param year 目标年份
-     * @param keyword 搜索关键词，空值表示不限制关键词
+     * @param keyword 标题模糊搜索关键词，空值表示不限制标题
      * @return 业务响应字段，逐字段中文说明见响应组装处
      */
     public Map<String, Object> list(Long familyId, Long userId, int page, int size, Integer year, String keyword) {
+        return list(familyId, userId, page, size, year, keyword, null);
+    }
+
+    /** 按家庭、年份、作者用户ID及标题关键词过滤后分页，作者ID不是家庭成员行ID。 */
+    public Map<String, Object> list(Long familyId, Long userId, int page, int size, Integer year, String keyword, Long authorId) {
         familyService.requireMember(familyId, userId);
         LambdaQueryWrapper<Memory> query = new LambdaQueryWrapper<Memory>().eq(Memory::getFamilyId, familyId);
         if (year != null) query.eq(Memory::getMemoryYear, year);
+        if (authorId != null) query.eq(Memory::getAuthorId, authorId);
         if (StringUtils.hasText(keyword))
-            query.and(q -> q.like(Memory::getTitle, keyword).or().like(Memory::getContent, keyword).or().like(Memory::getLocation, keyword));
+            query.like(Memory::getTitle, keyword.trim());
         query.orderByDesc(Memory::getMemoryDate).orderByDesc(Memory::getCreatedAt);
         Page<Memory> result = memoryMapper.selectPage(new Page<>(Math.max(page, 1), Math.min(Math.max(size, 1), 50)),
                 query);

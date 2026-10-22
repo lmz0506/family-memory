@@ -1,7 +1,7 @@
 import {nextTick, onBeforeUnmount, watch, type Ref} from 'vue'
 
 // Shared keyboard, focus and scroll behavior for modal forms and media viewers.
-export function useDialog(open: Ref<boolean>, panel: Ref<HTMLElement | undefined>, close: () => void) {
+export function useDialog(open: Ref<boolean>, panel: Ref<HTMLElement | undefined>, close: () => void, modal: () => boolean = () => true) {
   let previous: HTMLElement | null = null
   let scrollHost: HTMLElement | null = null
   let previousOverflow = ''
@@ -9,7 +9,7 @@ export function useDialog(open: Ref<boolean>, panel: Ref<HTMLElement | undefined
   function keydown(event: KeyboardEvent) {
     if (!open.value) return
     if (event.key === 'Escape') {event.preventDefault(); event.stopPropagation(); close()}
-    if (event.key !== 'Tab') return
+    if (event.key !== 'Tab' || !modal()) return
     const elements = Array.from(panel.value?.querySelectorAll<HTMLElement>(selector) || []).filter(el => el.getClientRects().length)
     const first = elements[0], last = elements[elements.length - 1]
     if (!first) { event.preventDefault(); panel.value?.focus(); return }
@@ -26,9 +26,8 @@ export function useDialog(open: Ref<boolean>, panel: Ref<HTMLElement | undefined
   watch(open, async value => {
     if (!value) {release(); return}
     previous = document.activeElement as HTMLElement
-    scrollHost = document.querySelector<HTMLElement>('[data-app-scroll]') || document.body
-    previousOverflow = scrollHost.style.overflow
-    scrollHost.style.overflow = 'hidden'
+    scrollHost = modal() ? document.querySelector<HTMLElement>('[data-app-scroll]') || document.body : null
+    if (scrollHost) {previousOverflow = scrollHost.style.overflow;scrollHost.style.overflow = 'hidden'}
     document.addEventListener('keydown', keydown, true)
     await nextTick()
     if (open.value) (panel.value?.querySelector<HTMLElement>('[autofocus]') || panel.value)?.focus()

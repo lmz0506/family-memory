@@ -42,5 +42,5 @@ onBeforeUnmount(() => clearInterval(tick))
 .u070-x:hover{background:var(--ux-surface-2);color:var(--ux-ink)}
 .u070-bar{position:absolute;left:16px;right:16px;bottom:0;height:2px;border-radius:2px;background:var(--c);opacity:.5;transform-origin:0 50%}
 .toast-enter-from{transform:translateY(90px) scale(.9);opacity:0}.toast-leave-to{opacity:0;transform:translateX(100%)}.toast-leave-active{position:absolute;pointer-events:none}
-@media(max-width:1023px){.u070-zone{right:16px;bottom:100px}}
+@media(max-width:1023px){.u070-zone{right:16px;bottom:24px}}
 </style>

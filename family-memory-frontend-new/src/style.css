@@ -1,21 +1,17 @@
 @tailwind base; @tailwind components; @tailwind utilities;
-:root {
-    font-family: "Plus Jakarta Sans", "PingFang SC", "Microsoft YaHei", sans-serif;
-    color: #332e2b;
-    background: #fafaf7;
-    font-synthesis: none
-}
-
-/* Lucian UX/UI Prompt theme tokens · MIT License (c) 2026 Seokwoooo · https://lucianlabs.dev/uxui-prompt/ */
-:root {
-    color-scheme: light;
-    --ux-page: #fffaf5; --ux-surface: #ffffff; --ux-surface-2: #f6f1eb; --ux-surface-3: #e9e0d7;
-    --ux-ink: #332e2b; --ux-ink-2: #66584d; --ux-ink-3: #887263;
-    --ux-line: rgba(74,62,53,.1); --ux-line-2: rgba(74,62,53,.2);
-    --ux-accent: #cc563d; --ux-accent-soft: #fdf0ec; --ux-accent-ink: #fff;
-    --ux-mint: #24785c; --ux-danger: #bd394c; --ux-warn: #ad701b;
-    --ux-shadow: rgba(74,62,53,.08); --ux-shadow-strong: rgba(74,62,53,.22);
-    --ux-ease: cubic-bezier(.2,.8,.2,1); --ux-spring: cubic-bezier(.34,1.45,.64,1);
+/* One shared semantic theme for the sea, reading pages and editors. */
+:root{
+ --sky-page:18 19 22;--sky-surface:26 28 32;--sky-soft:31 33 38;--sky-raised:38 38 44;
+ /* Static diffused color fields for reading pages; the star canvas keeps its own atmosphere. */
+ --sky-ambient-base:#1b1d2a;
+ --sky-ambient:radial-gradient(ellipse at 7% 4%,#79586538 0%,transparent 52%),radial-gradient(ellipse at 96% 25%,#4c58923d 0%,transparent 54%),radial-gradient(ellipse at 40% 98%,#98734f1a 0%,transparent 52%),linear-gradient(145deg,#29252d 0%,#20212e 48%,#191c29 100%);
+ --sky-ink:240 228 210;--sky-secondary:181 170 155;--sky-muted:165 156 144;
+ --sky-line:60 61 72;--sky-line-strong:100 91 81;--sky-action:226 184 115;--sky-action-ink:33 28 23;--sky-accent:226 184 115;--sky-danger:239 151 148;--sky-positive:150 199 174;
+ --ux-page:rgb(var(--sky-page));--ux-surface:rgb(var(--sky-surface));--ux-surface-2:rgb(var(--sky-soft));--ux-surface-3:rgb(var(--sky-raised));
+ --ux-ink:rgb(var(--sky-ink));--ux-ink-2:rgb(var(--sky-secondary));--ux-ink-3:rgb(var(--sky-muted));--ux-line:rgb(var(--sky-line)/.6);--ux-line-2:rgb(var(--sky-line-strong)/.65);
+ --ux-accent:rgb(var(--sky-accent));--ux-accent-soft:rgb(var(--sky-accent)/.1);--ux-accent-ink:rgb(var(--sky-action-ink));--ux-mint:rgb(var(--sky-positive));--ux-danger:rgb(var(--sky-danger));--ux-warn:rgb(var(--sky-accent));--ux-shadow:#03060c40;--ux-shadow-strong:#03060c90;--ux-ease:cubic-bezier(.2,.8,.2,1);--ux-spring:cubic-bezier(.34,1.45,.64,1);
+ --fm-brand:var(--ux-accent);--fm-action:rgb(var(--sky-action));--fm-paper:var(--ux-surface);--fm-page:var(--ux-page);--fm-ink:var(--ux-ink);--fm-secondary:var(--ux-ink-2);--fm-border:var(--ux-line);
+ font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;color:var(--ux-ink);background:var(--ux-page);color-scheme:dark;font-synthesis:none;
 }
 .ux,.ux *,.ux *::before,.ux *::after{box-sizing:border-box}
 .ux{font-family:inherit;color:var(--ux-ink);-webkit-font-smoothing:antialiased;letter-spacing:-.01em;overflow-wrap:break-word}
@@ -25,15 +21,15 @@ button, a, input, textarea, select{-webkit-tap-highlight-color:transparent}
 button:not(:disabled),a{touch-action:manipulation}
 button:not(:disabled){cursor:pointer}
 button:disabled{cursor:wait}
-:focus-visible{outline:2px solid var(--ux-accent);outline-offset:4px}
+:focus-visible{outline:2px solid var(--ux-accent);outline-offset:3px}
 button:focus:not(:focus-visible),a:focus:not(:focus-visible){outline:none}
 input,textarea,select{font-size:16px}
-.page-shell{width:100%;max-width:1440px;margin-inline:auto}
+.page-shell{width:100%;max-width:1280px;margin-inline:auto}
 .page-eyebrow{font-size:11px;font-weight:700;letter-spacing:.18em;color:var(--ux-accent)}
-.page-title{font-family:"Noto Serif SC","Songti SC",serif;font-size:clamp(26px,3vw,36px);line-height:1.4;font-weight:700;letter-spacing:-.03em}
-.empty-state{display:grid;justify-items:center;gap:12px;border:1px dashed #dccbbb;border-radius:24px;padding:64px 24px;background:rgba(255,255,255,.65);text-align:center;color:var(--ux-ink-2)}
-.page-reveal{animation:page-reveal .5s cubic-bezier(.2,.8,.2,1) both}
-@keyframes page-reveal{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+.page-title{font-family:inherit;font-size:clamp(26px,3vw,36px);line-height:1.4;font-weight:700;letter-spacing:-.03em}
+.empty-state{display:grid;justify-items:center;gap:12px;border:1px dashed var(--ux-line-2);border-radius:24px;padding:64px 24px;background:var(--ux-surface);text-align:center;color:var(--ux-ink-2)}
+.page-reveal{animation:page-reveal .22s cubic-bezier(.2,.8,.2,1) both}
+@keyframes page-reveal{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important}}
 
 * {
@@ -55,8 +51,8 @@ button {
 }
 
 ::selection {
-    color: #e76f51;
-    background: rgba(231, 111, 81, .2)
+    color: var(--ux-ink);
+    background: rgb(var(--sky-accent)/.22)
 }
 
 ::-webkit-scrollbar {
@@ -70,7 +66,7 @@ button {
 
 ::-webkit-scrollbar-thumb {
     border-radius: 9999px;
-    background: #e5dacd
+    background: #655d55
 }
 
 .no-scrollbar::-webkit-scrollbar {
@@ -81,9 +77,7 @@ button {
     scrollbar-width: none
 }
 
-.paper {
-    background: radial-gradient(circle at 50% 0%, rgba(253, 240, 236, .8) 0%, rgba(250, 250, 247, 0) 70%), #fafaf7
-}
+.paper{background:var(--sky-ambient);background-color:var(--sky-ambient-base)}
 
 .fade-enter-active, .fade-leave-active {
     transition: all .2s ease
@@ -93,3 +87,15 @@ button {
     opacity: 0;
     transform: translateY(6px)
 }
+
+.sky-page-header{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:4px 0 12px}.sky-page-header .page-title{font-size:30px;font-weight:500;letter-spacing:.02em}.sky-page-header p{margin-top:9px;color:var(--ux-ink-2);font-size:14px;line-height:1.8}.sky-page-actions,.sky-toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.sky-toolbar{justify-content:space-between;padding:0 0 16px;border-bottom:1px solid var(--ux-line)}.sky-toolbar-tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.sky-toolbar-search{display:flex;align-items:center;gap:9px;border:1px solid var(--ux-line-2);border-radius:10px;padding:0 12px;min-height:42px;background:var(--ux-surface);color:var(--ux-ink-2)}.sky-toolbar-search input{min-width:0;width:180px;outline:none;background:none;color:var(--ux-ink);font-size:14px;padding:9px 0}.sky-toolbar-search button{display:grid;place-items:center;min-width:32px;min-height:36px}.sky-year-filter{width:130px}.sky-year-filter .u031-lab{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+.sky-primary,.fm-primary{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:0 18px;border-radius:11px;background:rgb(var(--sky-action));color:rgb(var(--sky-action-ink));font-size:14px;font-weight:550;box-shadow:none;transition:filter .16s}.sky-primary:hover,.fm-primary:hover{background:rgb(var(--sky-action));filter:brightness(1.07)}.sky-primary:disabled{opacity:.5}.sky-secondary{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:42px;padding:0 14px;border:1px solid var(--ux-line-2);border-radius:10px;background:rgb(var(--sky-soft)/.5);color:var(--ux-ink-2);font-size:13px}.sky-secondary:hover{border-color:rgb(var(--sky-accent)/.4);color:var(--ux-ink)}
+.sky-panel{background:var(--ux-surface);border:1px solid var(--ux-line);border-radius:16px}.sky-content input:not([type=file]):not([type=checkbox]):not([type=radio]),.sky-content textarea,.sky-auth input,.sky-auth textarea,.sky-dialog input:not([type=checkbox]),.sky-dialog textarea{color:var(--ux-ink);background:rgb(var(--sky-soft)/.7);border-color:var(--ux-line-2);font-size:16px;box-shadow:none}.sky-content input:focus,.sky-content textarea:focus,.sky-auth input:focus,.sky-auth textarea:focus,.sky-dialog input:focus,.sky-dialog textarea:focus{outline:none;border-color:rgb(var(--sky-accent)/.65);box-shadow:none}.sky-content input::placeholder,.sky-content textarea::placeholder,.sky-auth input::placeholder{color:var(--ux-ink-3)}
+.sky-content .page-eyebrow{color:var(--ux-ink-3);font-size:11px;font-weight:400;letter-spacing:.06em}.sky-content p{overflow-wrap:anywhere}.sky-content button,.sky-dialog button{touch-action:manipulation}.sky-content :is(button,a):focus-visible,.sky-dialog :is(button,a):focus-visible{outline:1px solid var(--ux-accent);outline-offset:3px}.sky-dialog{background:var(--ux-surface);color:var(--ux-ink);border-color:var(--ux-line-2);color-scheme:dark}.sky-reading{max-width:760px;margin-inline:auto;background:var(--ux-surface);border:1px solid var(--ux-line);border-radius:16px}.sky-reading-copy{font-size:16px;line-height:1.95;color:var(--ux-ink);overflow-wrap:anywhere}.sky-content .text-xs{font-size:12px}.sky-content .rounded-2xl{border-radius:14px}.sky-content .shadow-soft,.sky-content .shadow-soft-lg{box-shadow:0 8px 24px #03060b25}
+@media(max-width:767px){.sky-page-header{align-items:flex-start;gap:15px}.sky-page-header .page-title{font-size:26px}.sky-page-header p{font-size:13px}.sky-page-actions{gap:7px}.sky-page-actions .sky-primary{padding:0 13px;font-size:13px}.sky-toolbar{gap:12px}.sky-toolbar-tools{width:100%}.sky-toolbar-search{flex:1;min-width:140px}.sky-toolbar-search input{width:100%}.sky-year-filter{width:112px}.sky-content button,.sky-dialog button{min-height:44px}.sky-dialog{max-width:calc(100vw - 24px)}.sky-auth input,.sky-auth textarea{font-size:16px}}
+
+.bg-night-action{color:rgb(var(--sky-action-ink))}.fm-shell-content:has(.timeline-stars) .fm-content{padding:0;overflow:hidden}.timeline-stars .universe-header{top:96px;left:30px}.timeline-stars .universe-camera button{min-height:34px}.timeline-stars .universe-stage{height:100%;min-height:0}
+.sky-editor-host .sky-editor footer>button{background:rgb(var(--sky-action));color:rgb(var(--sky-action-ink))}.sky-editor-host .sky-editor footer>button:hover{background:rgb(var(--sky-action));filter:brightness(1.06)}
+.sky-auth{color:var(--ux-ink);color-scheme:dark}.sky-auth h1,.sky-auth h2{font-weight:500}.sky-auth .bg-night-action{color:rgb(var(--sky-action-ink))}
+
+@media(max-width:767px){.memory-grid-small .memory-card-meta{flex-wrap:wrap;gap:5px}.memory-grid-small .memory-card-actions{gap:7px}.memory-grid-small .memory-card-actions>div{justify-content:space-between;width:100%;gap:8px}.memory-grid-small .memory-read,.memory-grid-small .memory-responses span{display:none}.memory-grid-small .memory-responses{min-height:44px;min-width:40px}.memory-grid-small .sky-memory-card button{min-width:40px}}

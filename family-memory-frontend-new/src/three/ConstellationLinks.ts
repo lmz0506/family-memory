@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import {seaRippleGLSL} from './seaRipple'
 import {randomFromKey, type UniverseNode} from './memoryUniverse'
 
 type Edge = {from: UniverseNode; to: UniverseNode; control: THREE.Vector3; key: string; preview:boolean; context:boolean}
@@ -6,11 +7,11 @@ type Edge = {from: UniverseNode; to: UniverseNode; control: THREE.Vector3; key: 
 type RibbonCurve={points:THREE.Vector3[];colors:THREE.Color[];width:number;phase:number}
 function ribbon(width:number,opacity:number,glow=false){
   return new THREE.Mesh(new THREE.BufferGeometry(),new THREE.ShaderMaterial({
-    uniforms:{uResolution:{value:new THREE.Vector2(1,1)},uWidth:{value:width},uOpacity:{value:opacity},uTime:{value:0},uGlow:{value:glow?1:0},uDepthCenter:{value:200}},
+    uniforms:{uResolution:{value:new THREE.Vector2(1,1)},uWidth:{value:width},uOpacity:{value:opacity},uTime:{value:0},uGlow:{value:glow?1:0},uDepthCenter:{value:200},uRippleCenter:{value:new THREE.Vector3()},uRippleAge:{value:100}},
     vertexColors:true,transparent:true,depthWrite:!glow,side:THREE.DoubleSide,toneMapped:false,
-    vertexShader:`uniform float uDepthCenter;varying float vDepthFade;attribute vec3 aPrevious;attribute vec3 aNext;attribute float aSide;attribute float aWidth;attribute float aProgress;attribute float aPhase;varying float vProgress;varying float vPhase;varying vec2 vScreen;uniform vec2 uResolution;uniform float uWidth;varying vec3 vColor;varying float vSide;
-      void main(){vec4 p=projectionMatrix*modelViewMatrix*vec4(position,1.0);vec4 before=projectionMatrix*modelViewMatrix*vec4(aPrevious,1.0);vec4 after=projectionMatrix*modelViewMatrix*vec4(aNext,1.0);vec2 direction=(after.xy/after.w-before.xy/before.w)*uResolution;float lengthSquared=dot(direction,direction);direction=lengthSquared>.00001?direction*inversesqrt(lengthSquared):vec2(1.0,0.0);vec2 normal=vec2(-direction.y,direction.x);float depthScale=clamp(1.0+(uDepthCenter/max(1.0,-(modelViewMatrix*vec4(position,1.0)).z)-1.0)*2.2,.5,1.5);vDepthFade=depthScale;p.xy+=normal*aSide*(uWidth*aWidth*depthScale*.5+.7)*2.0/uResolution*p.w;gl_Position=p;vColor=color;vSide=aSide;vProgress=aProgress;vPhase=aPhase;vScreen=(p.xy/p.w*.5+.5)*uResolution;}`,
-    fragmentShader:`varying float vDepthFade;varying vec2 vScreen;uniform float uGlow;uniform float uTime;varying float vProgress;varying float vPhase;uniform float uOpacity;varying vec3 vColor;varying float vSide;void main(){float edge=max(fwidth(vSide),.02);float coverage=1.0-smoothstep(1.0-edge,1.0,abs(vSide));float distance=abs(fract(vProgress-uTime*.085+vPhase+.5)-.5);float flow=exp(-pow(distance/.17,2.0));coverage*=mix(1.0,exp(-vSide*vSide*4.5),uGlow);if(coverage<.04)discard;gl_FragColor=vec4(vColor*(.85+flow*.65),coverage*uOpacity*(.82+flow*.18)*clamp(vDepthFade*.9,.45,1.1));}`
+    vertexShader:`${seaRippleGLSL} uniform float uDepthCenter;varying float vDepthFade;attribute vec3 aPrevious;attribute vec3 aNext;attribute float aSide;attribute float aWidth;attribute float aProgress;attribute float aPhase;varying float vProgress;varying float vPhase;varying vec2 vScreen;uniform vec2 uResolution;uniform float uWidth;varying vec3 vColor;varying float vSide;
+      void main(){vec4 p=projectionMatrix*modelViewMatrix*vec4(seaRipple(position),1.0);vec4 before=projectionMatrix*modelViewMatrix*vec4(seaRipple(aPrevious),1.0);vec4 after=projectionMatrix*modelViewMatrix*vec4(seaRipple(aNext),1.0);vec2 direction=(after.xy/after.w-before.xy/before.w)*uResolution;float lengthSquared=dot(direction,direction);direction=lengthSquared>.00001?direction*inversesqrt(lengthSquared):vec2(1.0,0.0);vec2 normal=vec2(-direction.y,direction.x);float depthScale=clamp(1.0+(uDepthCenter/max(1.0,-(modelViewMatrix*vec4(seaRipple(position),1.0)).z)-1.0)*2.2,.5,1.5);vDepthFade=depthScale;p.xy+=normal*aSide*(uWidth*aWidth*depthScale*.5+.7)*2.0/uResolution*p.w;gl_Position=p;vColor=color;vSide=aSide;vProgress=aProgress;vPhase=aPhase;vScreen=(p.xy/p.w*.5+.5)*uResolution;}`,
+    fragmentShader:`varying float vDepthFade;varying vec2 vScreen;uniform float uGlow;uniform float uTime;varying float vProgress;varying float vPhase;uniform float uOpacity;varying vec3 vColor;varying float vSide;void main(){float edge=max(fwidth(vSide),.02);float coverage=1.0-smoothstep(1.0-edge,1.0,abs(vSide));float distance=abs(fract(vProgress-uTime*.16+vPhase+.5)-.5);float flow=exp(-pow(distance/.085,2.0));coverage*=mix(1.0,exp(-vSide*vSide*4.5),uGlow);if(coverage<.04)discard;gl_FragColor=vec4(vColor*(.65+flow*2.6),coverage*uOpacity*(.55+flow*.45)*clamp(vDepthFade*.9,.45,1.1));}`
   }))
 }
 function fillRibbon(mesh:THREE.Mesh<THREE.BufferGeometry,THREE.ShaderMaterial>,curves:RibbonCurve[]){
@@ -63,6 +64,7 @@ export class ConstellationLinks extends THREE.Group {
   resize(width:number,height:number,_dpr:number) {for(const mesh of [this.quiet,this.active,this.glowQuiet,this.glowActive])mesh.material.uniforms.uResolution.value.set(width,height)}
   setDepth(distance:number){for(const mesh of [this.quiet,this.active,this.glowQuiet,this.glowActive])mesh.material.uniforms.uDepthCenter.value=distance}
   private matches(node:UniverseNode){return this.filter===null||Boolean(this.matchingKeys?.has(node.key))||node.ids.some(id=>this.filter!.has(id))}
+  setRipple(center:THREE.Vector3,age:number){for(const mesh of [this.quiet,this.active,this.glowQuiet,this.glowActive]){mesh.material.uniforms.uRippleCenter.value.copy(center);mesh.material.uniforms.uRippleAge.value=age}}
   update(time:number){for(const mesh of [this.quiet,this.active,this.glowQuiet,this.glowActive])mesh.material.uniforms.uTime.value=time}
   subtree(key:string|null):UniverseNode[]{
     const root=key?this.map.get(key):undefined
@@ -141,6 +143,14 @@ export class ConstellationLinks extends THREE.Group {
     fillRibbon(this.quiet,quiet);fillRibbon(this.active,bright)
     this.glowQuiet.geometry=this.quiet.geometry;this.glowQuiet.visible=this.quiet.visible
     this.glowActive.geometry=this.active.geometry;this.glowActive.visible=this.active.visible
+  }
+  labelAnchor(key:string){
+    // Prefer the incoming branch. Root years use a stable outgoing branch.
+    const edge=this.edges.find(e=>e.to.key===key)||this.edges.filter(e=>e.from.key===key).sort((a,b)=>a.to.key.localeCompare(b.to.key))[0]
+    if(!edge)return undefined
+    const t=edge.to.key===key?.64:.22
+    const curve=new THREE.QuadraticBezierCurve3(new THREE.Vector3(...edge.from.position),edge.control,new THREE.Vector3(...edge.to.position))
+    return {point:curve.getPoint(t),tangent:curve.getTangent(t)}
   }
   dispose(){for(const object of [this.quiet,this.active]){object.geometry.dispose();object.material.dispose()}this.glowQuiet.material.dispose();this.glowActive.material.dispose()}
 }

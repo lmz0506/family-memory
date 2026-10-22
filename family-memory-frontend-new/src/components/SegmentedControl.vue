@@ -31,9 +31,9 @@ onBeforeUnmount(() => observer?.disconnect())
   </div>
 </template>
 <style scoped>
-.u039-tabs{position:relative;display:flex;padding:5px;border-radius:999px;background:var(--ux-surface);box-shadow:0 0 0 1px var(--ux-line);max-width:100%;isolation:isolate}
-.u039-pill{position:absolute;left:0;top:5px;bottom:5px;border-radius:999px;background:var(--ux-ink);box-shadow:0 8px 16px -10px var(--ux-shadow-strong);transition:transform .5s var(--ux-spring),width .5s var(--ux-spring);pointer-events:none}
-.u039-tab{position:relative;flex:1;min-width:0;height:42px;border:0;padding:0 16px;border-radius:999px;background:none;font-size:14px;font-weight:680;color:var(--ux-ink-2);white-space:nowrap;transition:color .35s var(--ux-ease)}
-.u039-tab[aria-pressed="true"]{color:var(--ux-page)}
+.u039-tabs{position:relative;display:flex;padding:5px;border-radius:10px;background:var(--ux-surface);box-shadow:0 0 0 1px var(--ux-line);max-width:100%;isolation:isolate}
+.u039-pill{position:absolute;left:0;top:5px;bottom:5px;border-radius:10px;background:var(--ux-accent-soft);box-shadow:0 8px 16px -10px var(--ux-shadow-strong);transition:transform .5s var(--ux-spring),width .5s var(--ux-spring);pointer-events:none}
+.u039-tab{position:relative;flex:1;min-width:0;height:42px;border:0;padding:0 16px;border-radius:10px;background:none;font-size:14px;font-weight:450;color:var(--ux-ink-2);white-space:nowrap;transition:color .35s var(--ux-ease)}
+.u039-tab[aria-pressed="true"]{color:var(--ux-accent)}
 .u039-tab:focus-visible{outline:2px solid var(--ux-accent);outline-offset:2px}
 </style>
