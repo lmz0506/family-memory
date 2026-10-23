@@ -7,4 +7,5 @@
 /family-memory-backend/target/
 /.umadev
 /uploads
+/.playwright-cli/
 

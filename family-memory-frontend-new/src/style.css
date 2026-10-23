@@ -80,7 +80,7 @@ button {
 .paper{background:var(--sky-ambient);background-color:var(--sky-ambient-base)}
 
 .fade-enter-active, .fade-leave-active {
-    transition: all .2s ease
+    transition: opacity .2s ease, transform .2s ease
 }
 
 .fade-enter-from, .fade-leave-to {
@@ -99,3 +99,7 @@ button {
 .sky-auth{color:var(--ux-ink);color-scheme:dark}.sky-auth h1,.sky-auth h2{font-weight:500}.sky-auth .bg-night-action{color:rgb(var(--sky-action-ink))}
 
 @media(max-width:767px){.memory-grid-small .memory-card-meta{flex-wrap:wrap;gap:5px}.memory-grid-small .memory-card-actions{gap:7px}.memory-grid-small .memory-card-actions>div{justify-content:space-between;width:100%;gap:8px}.memory-grid-small .memory-read,.memory-grid-small .memory-responses span{display:none}.memory-grid-small .memory-responses{min-height:44px;min-width:40px}.memory-grid-small .sky-memory-card button{min-width:40px}}
+
+/* Lucian UX/UI Prompt base · MIT (c) 2026 Seokwoooo. Project palette retained. */
+.ux :focus-visible{outline:2px solid var(--ux-accent);outline-offset:3px}
+@media(prefers-reduced-motion:reduce){.ux,.ux *,.ux *::before,.ux *::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important}}

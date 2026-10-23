@@ -2,7 +2,7 @@
 <script setup lang="ts">
 import {ref, watch} from 'vue'
 import {ImageOff, RotateCcw} from 'lucide-vue-next'
-const props = withDefaults(defineProps<{src: string; alt: string; fit?: 'cover' | 'contain'; eager?: boolean;compact?:boolean}>(), {fit: 'cover', eager: false,compact:false})
+const props = withDefaults(defineProps<{src: string; alt: string; fit?: 'cover' | 'contain'; eager?: boolean;compact?:boolean;width?:number;height?:number}>(), {fit: 'cover', eager: false,compact:false})
 const emit=defineEmits<{dimensions:[ratio:number];failed:[source:string]}>()
 function onError(){failed.value=true;emit('failed',props.src)}
 function onLoad(event:Event){loaded.value=true;const img=event.target as HTMLImageElement;if(img.naturalHeight)emit('dimensions',img.naturalWidth/img.naturalHeight)}
@@ -14,7 +14,7 @@ function retry() { loaded.value = false; failed.value = false; attempt.value++ }
 </script>
 <template>
   <span class="ux u258-tl" :class="{'is-lq': !loaded && !failed, 'is-failed':failed,'is-compact':compact}" :aria-busy="!loaded && !failed">
-    <img v-if="src && !failed" :key="`${src}-${attempt}`" :src="src" :alt="alt" :loading="eager ? 'eager' : 'lazy'" decoding="async"
+    <img v-if="src && !failed" :key="`${src}-${attempt}`" :src="src" :alt="alt" :loading="eager ? 'eager' : 'lazy'" :fetchpriority="eager?'high':undefined" :width="width" :height="height" decoding="async"
          :style="{objectFit:fit}" @load="onLoad" @error="onError"/>
     <span v-if="failed || !src" class="u258-fallback" role="img" :aria-label="`${alt}：照片暂时无法加载`"><ImageOff :size="compact?18:28"/><span v-if="!compact">影像暂未显现</span><small v-if="!compact">可以稍后重试</small></span>
     <button v-if="failed" type="button" class="u258-retry" aria-label="重新加载照片" @click.stop="retry"><RotateCcw :size="14"/><span v-if="!compact">重试</span></button>

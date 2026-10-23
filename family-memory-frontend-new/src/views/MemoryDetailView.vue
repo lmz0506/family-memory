@@ -6,6 +6,7 @@ import {memoryApi} from '@/api'
 import {useMemoryStore} from '@/stores/memories'
 import MemoryImage from '@/components/MemoryImage.vue'
 import SkyPageHeader from '@/components/SkyPageHeader.vue'
+import StarChart from '@/components/StarChart.vue'
 import MediaViewer from '@/components/MediaViewer.vue'
 import {notify} from '@/composables/useToast'
 import type {Memory} from '@/types'
@@ -62,17 +63,17 @@ onMounted(load)
   <div v-if="loadError" class="empty-state" role="alert"><p>{{loadError}}</p><button @click="load" class="sky-primary rounded-full bg-night-action px-5 py-3 text-night-action-ink">重新加载</button></div>
   <div v-else-if="!memory" class="grid min-h-[70vh] place-items-center"><LoaderCircle class="animate-spin text-night-accent"/></div>
 
-  <section v-else class="page-shell page-reveal space-y-6">
+  <section v-else class="constellation-detail page-reveal space-y-6">
     <div class="relative">
-      <div class="mb-4 flex items-center justify-between px-1">
+      <div class="detail-back-row">
         <button @click="goBack" class="group inline-flex items-center gap-2 text-xs font-semibold text-night-secondary transition hover:text-night-accent">
           <span class="grid h-7 w-7 place-items-center rounded-lg border border-night-line/60 bg-night-surface shadow-sm transition group-hover:border-night-accent/40 group-hover:bg-night-accent/10"><ArrowLeft :size="14" class="transition-transform group-hover:-translate-x-0.5"/></span>
           <span>返回{{backName}}</span>
         </button>
-        <span class="text-xs font-medium text-night-muted">回忆详情</span>
+        <span class="text-xs font-medium text-night-muted">✦ MEMORY / 回忆中的一颗星</span>
       </div>
 
-      <SkyPageHeader :title="memory.title" :description="`${memory.memoryDate} · ${memory.authorName}`"/>
+      <header class="detail-orbit-heading"><StarChart/><p class="constellation-eyebrow">A MOMENT IN OUR UNIVERSE / 星光档案</p><SkyPageHeader :title="memory.title" :description="`${memory.memoryDate} · ${memory.authorName}`"/></header>
       <template v-if="media.length">
         <div class="detail-media group relative overflow-hidden rounded-2xl bg-night-soft/60" :style="{aspectRatio:mediaRatio}"
              @touchstart.passive="onTouchStart" @touchend.passive="onTouchEnd">
@@ -88,7 +89,7 @@ onMounted(load)
         </div>
 
         <div v-if="media.length > 1" class="no-scrollbar mt-3 flex items-center justify-center gap-3 overflow-x-auto rounded-2xl bg-night-soft/50 p-3">
-          <button v-for="(url,index) in media" :key="url" @click="selectMedia(index)" class="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl border-2 border-night-line shadow-sm ring-2 transition-all hover:scale-105" :class="index===activeIndex?'ring-night-accent opacity-100':'ring-transparent opacity-60 hover:opacity-100'">
+          <button v-for="(url,index) in media" :key="url" :aria-label="`查看第${index+1}个影像`" :aria-pressed="index===activeIndex" @click="selectMedia(index)" class="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl border-2 border-night-line shadow-sm ring-2 transition-all hover:scale-105" :class="index===activeIndex?'ring-night-accent opacity-100':'ring-transparent opacity-60 hover:opacity-100'">
             <video v-if="isVideo(url)" :src="url" muted playsinline preload="metadata" class="h-full w-full object-cover"></video>
             <img v-else :src="url" :alt="`缩略图${index+1}`" class="h-full w-full object-cover"/>
             <span v-if="isVideo(url)" class="absolute inset-0 grid place-items-center bg-black/20 text-white"><Play :size="14" fill="currentColor"/></span>
@@ -96,7 +97,7 @@ onMounted(load)
         </div>
       </template>
 
-      <div class="detail-reading mx-auto mt-6 w-full max-w-3xl space-y-6 p-7 pb-8">
+      <div class="detail-reading-layout"><div class="detail-reading mx-auto mt-6 w-full max-w-3xl space-y-6 p-7 pb-8">
         <div class="flex flex-col justify-between gap-5 md:flex-row md:items-center">
           <div class="space-y-2">
             <div class="flex flex-wrap items-center gap-2">
@@ -132,7 +133,7 @@ onMounted(load)
           <form @submit.prevent="send" class="space-y-3 rounded-2xl border border-night-line bg-night-soft/80 p-4">
             <div class="flex items-start gap-3">
               <div class="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-night-action text-xs font-bold text-white shadow-sm">我</div>
-              <textarea v-model="comment" rows="2" maxlength="500" placeholder="写下一句想对家人说的话…" class="w-full resize-none rounded-xl border border-night-line/80 bg-night-surface p-3 text-xs text-night-ink outline-none transition placeholder:text-night-muted focus:border-night-accent  "></textarea>
+              <textarea aria-label="给这段回忆写回应" v-model="comment" rows="2" maxlength="500" placeholder="写下一句想对家人说的话…" class="w-full resize-none rounded-xl border border-night-line/80 bg-night-surface p-3 text-xs text-night-ink outline-none transition placeholder:text-night-muted focus:border-night-accent  "></textarea>
             </div>
             <div class="flex items-center justify-end pt-1">
               <button :disabled="sending || !comment.trim()" class="sky-primary flex items-center gap-2 rounded-xl bg-night-action px-4 py-2 text-xs font-semibold text-night-action-ink shadow-sm transition hover:bg-night-action active:scale-[.99] disabled:opacity-40"><LoaderCircle v-if="sending" :size="14" class="animate-spin"/><Send v-else :size="14"/>发送回应</button>
@@ -147,7 +148,7 @@ onMounted(load)
           </div>
           <div v-else class="rounded-2xl border border-night-line/60 bg-night-soft/40 p-5 text-center text-xs text-night-muted">还没有回应，来说第一句话吧。</div>
         </div>
-      </div>
+      </div><aside class="memory-coordinate"><small>✧ 星光坐标</small><strong>{{memory.memoryDate.split('-').join(' . ')}}</strong><span>{{memory.authorName}} 留下的光</span><p v-if="memory.location">{{memory.location}}</p><p>那一天的故事，<br>从此有了一颗星的位置。</p><RouterLink :to="{name:'album'}">回到回忆星图 <ChevronRight :size="14"/></RouterLink></aside></div>
     </div>
 
     <MediaViewer v-model:open="viewerOpen" v-model:index="viewerIndex" :media="media" :title="memory.title"/>

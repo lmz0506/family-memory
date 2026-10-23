@@ -3,6 +3,7 @@ import {onMounted, ref} from 'vue';
 import {useRoute, useRouter} from 'vue-router';
 import {CalendarDays, ChevronLeft, LoaderCircle, LockKeyhole, Send} from 'lucide-vue-next';
 import CapsuleLetter from '@/components/CapsuleLetter.vue'
+import StarChart from '@/components/StarChart.vue'
 import {capsuleApi} from '@/api';
 import type {Capsule} from '@/types'
 
@@ -18,11 +19,11 @@ onMounted(load)
   <div v-else-if="!capsule" class="grid min-h-[60dvh] place-items-center">
     <LoaderCircle class="animate-spin text-night-accent"/>
   </div>
-  <div v-else class="page-shell page-reveal">
-    <button @click="goBack" :aria-label="route.query.from==='family'?'返回家人':route.query.from==='home'||route.query.from==='universe'?'返回星海':'返回珍藏'" class="grid h-11 w-11 place-items-center rounded-full bg-night-surface shadow-soft">
-      <ChevronLeft :size="20"/>
-    </button>
+  <section v-else class="capsule-observatory page-reveal">
+    <StarChart variant="capsule"/>
+    <div class="detail-back-row"><button @click="goBack" class="detail-back"><ChevronLeft :size="17"/>返回{{route.query.from==='family'?'家人':route.query.from==='home'||route.query.from==='universe'?'星海':'珍藏'}}</button><span>✧ LIGHT TO THE FUTURE / 星光珍藏</span></div>
+    <div class="capsule-flight-meta"><span><Send :size="13"/>寄给 {{capsule.recipient||'未来的我们'}}</span><span><CalendarDays :size="13"/>{{capsule.openDate}} · 约定重逢</span><span><LockKeyhole :size="13"/>{{capsule.opened?'星光已抵达':'时间守护中'}}</span></div>
     <CapsuleLetter :capsule="capsule" :checking="checking" @refresh="load"/>
-
-  </div>
+    <p class="capsule-endnote">星光走过漫长的路，只为在那一天与你相逢。</p>
+  </section>
 </template>

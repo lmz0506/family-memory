@@ -1,15 +1,19 @@
 <script setup lang="ts">
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
-import {ChevronLeft, ChevronRight, LoaderCircle, Plus, Search, X} from 'lucide-vue-next'
+import {ArrowUpRight, ChevronLeft, ChevronRight, LoaderCircle, Plus, Search, X} from 'lucide-vue-next'
 import {useRoute,useRouter} from 'vue-router'
 import SegmentedControl from '@/components/SegmentedControl.vue'
 import type {FamilyMember,Memory} from '@/types'
 import {useFamilyStore} from '@/stores/family'
 import {useMemoryStore} from '@/stores/memories'
 import MemoryCard from '@/components/MemoryCard.vue'
-import MemoryWall from '@/components/MemoryWall.vue'
+import GlowCollection from '@/components/GlowCollection.vue'
+import SpotlightStory from '@/components/SpotlightStory.vue'
+import OrbitalScene from '@/components/OrbitalScene.vue'
+import MagneticAction from '@/components/MagneticAction.vue'
+import {usePageMotion} from '@/composables/usePageMotion'
 import {familyApi,memoryApi} from '@/api'
-import SkyPageHeader from '@/components/SkyPageHeader.vue'
+import MemoryImage from '@/components/MemoryImage.vue'
 import SkySelect from '@/components/SkySelect.vue'
 import {readViewState,writeViewState} from '@/composables/viewState'
 import {albumPageSize} from '@/composables/albumLayout'
@@ -19,6 +23,14 @@ const view=computed(()=>route.query.view==='timeline'?'timeline':'grid')
 function switchView(value:string){void router.replace({query:{...route.query,view:value}})}
 const family = useFamilyStore()
 const memories = useMemoryStore()
+// The opening spread uses an actual story from the loaded page, never demo content.
+const openingMemories=ref<Memory[]>([])
+const coverStory = computed(() => {
+  const source=openingMemories.value.length?openingMemories.value:memories.items
+  const candidate=source.find(item => item.content?.trim() && (item.coverUrl || item.mediaUrls?.[0]) && !/\.(mp4|webm|ogg|mov|m4v)(?:$|[?#])/i.test(item.coverUrl || item.mediaUrls?.[0] || ''))
+  return candidate?(memories.items.find(item=>item.id===candidate.id)||candidate):undefined
+})
+const featuredId = computed(() => coverStory.value?.id ?? memories.items.find(item => item.coverUrl || item.mediaUrls?.length)?.id)
 const mobilePageSize = 4
 const keyword=ref(typeof route.query.keyword==='string'?route.query.keyword:''),yearFilter=ref(''),yearOptions=ref<number[]>([]),authorFilter=ref(''),authorMembers=ref<FamilyMember[]>([...family.members]),authorError=ref('')
 let searchTimer:ReturnType<typeof setTimeout>|undefined
@@ -40,6 +52,7 @@ let observer: IntersectionObserver | undefined,alive=true,loadVersion=0
 const desktopPageSize=ref(12)
 let resizeObserver:ResizeObserver|undefined,resizeTimer:ReturnType<typeof setTimeout>|undefined
 const albumRoot=ref<HTMLElement>()
+usePageMotion(albumRoot)
 function availableAlbumWidth(){const root=albumRoot.value;if(!root)return window.innerWidth-64;const css=window.getComputedStyle(root);return Math.max(0,root.clientWidth-(parseFloat(css.paddingLeft)||0)-(parseFloat(css.paddingRight)||0))}
 function updateAlbumWidth(){
  const size=albumPageSize(availableAlbumWidth())
@@ -106,7 +119,7 @@ onMounted(async () => {
   mediaQuery.addEventListener('change', handleBreakpoint)
   if (!family.current) await family.load()
   if(!family.current||!alive)return
-  await Promise.all([memoryApi.years(family.current.id).then(years=>yearOptions.value=years).catch(()=>{}),loadAuthors()])
+  await Promise.all([memoryApi.years(family.current.id).then(years=>yearOptions.value=years).catch(()=>{}),loadAuthors(),memoryApi.list(family.current.id,{page:1,size:12}).then(result=>{if(alive)openingMemories.value=result.list}).catch(()=>{})])
   if(!alive)return
   const saved=readViewState<{keyword:string;year:string;page:number;mobilePage:number;scroll:number;items?:import('@/types').Memory[];total:number;stale?:boolean;desktop:boolean;pageSize?:number;view?:string;authorId?:string}>(`album:${family.current.id}`)
   if(saved){if(route.query.keyword===undefined)keyword.value=saved.keyword;yearFilter.value=saved.year;authorFilter.value=saved.authorId||'';if(!route.query.view&&saved.view)switchView(saved.view);page.value=saved.page;mobilePage.value=saved.mobilePage
@@ -134,12 +147,16 @@ watch(()=>route.query.keyword,value=>{if(typeof value==='string'&&value!==keywor
 
 <template>
   <section ref="albumRoot" class="album-page page-reveal space-y-8">
-    <SkyPageHeader title="回忆" description="那些漫过岁月的欢喜与微光，都在这里被温柔记录。"><template #title-extra><span class="album-stat">{{family.current?.memoryCount??memories.total}} 段回忆 · {{family.current?.photoCount||0}} 个影像瞬间</span></template><button class="sky-primary" @click="openComposer"><Plus :size="17"/>记录这一刻</button></SkyPageHeader>
-    <div class="album-toolbar">
-      <div class="album-filters"><form class="album-search" @submit.prevent="submitSearch"><Search :size="15"/><input v-model="keyword" aria-label="搜索回忆" placeholder="搜索记忆标题…" @input="queueSearch" @compositionend="queueSearch"/><button v-if="keyword" type="button" aria-label="清除搜索" @click="keyword='';submitSearch()"><X :size="14"/></button><button v-else type="submit" aria-label="搜索"><Search :size="14"/></button></form>
+    <header class="memory-hero">
+      <div class="memory-hero-copy"><p class="observatory-kicker"><span></span> THE MEMORY OBSERVATORY <i>01 / 回忆</i></p><h1><span>把平凡的日子，</span><br><em>连成我们的星海。</em></h1><p class="memory-hero-description">那些被认真记住的瞬间，<br>会在漫长岁月里，继续发光。</p><div class="memory-hero-action"><MagneticAction label="点亮一段记忆" @activate="openComposer"/></div><div class="memory-hero-coordinates"><span><b>{{family.current?.memoryCount??memories.total}}</b> 颗回忆之星</span><span><b>{{family.current?.recordDays||0}}</b> 天共同轨迹</span><span class="coordinate-line"></span></div></div>
+      <div class="memory-hero-exhibit"><OrbitalScene/><div v-if="coverStory&&!loadError" class="memory-featured-orbit"><SpotlightStory :memory="coverStory"/><span class="exhibit-coordinate">✦ 从一颗星，重返那一天</span></div><div v-else class="memory-exhibit-empty"><span>✦</span><p>每一段故事，<br>都有自己的光。</p></div><span class="exhibit-annotation annotation-top">{{family.current?.name||'我们的家'}} / 私人星图</span><span class="exhibit-annotation annotation-side">A MOMENT. A STAR.</span></div>
+    </header>
+    <div class="album-chapter" data-reveal><div><span class="chapter-number">01 /</span><h2>回忆星图 <small>THE MOMENTS WE KEEP</small></h2></div><span>{{family.current?.memoryCount??memories.total}} 段回忆 <i>·</i> {{family.current?.photoCount||0}} 个影像瞬间</span></div>
+    <div class="album-toolbar" data-reveal>
+      <div class="album-filters"><form class="album-search" @submit.prevent="submitSearch"><Search aria-hidden="true" :size="15"/><input v-model="keyword" name="memory-search" autocomplete="off" aria-label="搜索回忆" placeholder="搜索记忆标题…" @input="queueSearch" @compositionend="queueSearch"/><button v-if="keyword" type="button" aria-label="清除搜索" @click="keyword='';submitSearch()"><X aria-hidden="true" :size="14"/></button><button v-else type="submit" aria-label="搜索"><Search aria-hidden="true" :size="14"/></button></form>
       <div class="album-filter"><SkySelect id="album-year" label="年份" :model-value="yearFilter" :options="[{value:'',label:'所有年份'},...yearOptions.map(y=>({value:String(y),label:`${y}年`}))]" @update:model-value="yearFilter=$event;submitSearch()"/></div>
       <div class="album-filter"><SkySelect id="album-author" label="作者" :model-value="authorFilter" :options="[{value:'',label:'所有作者'},...authorMembers.map(member=>({value:String(member.userId),label:member.displayName}))]" @update:model-value="authorFilter=$event;submitSearch()"/></div></div>
-      <SegmentedControl class="album-view-switch" :model-value="view" :options="[{value:'grid',label:'网格视图'},{value:'timeline',label:'时间轴'}]" label="回忆浏览方式" @update:model-value="switchView"/>
+      <SegmentedControl class="album-view-switch" :model-value="view" :options="[{value:'grid',label:'故事画廊'},{value:'timeline',label:'时间轴'}]" label="回忆浏览方式" @update:model-value="switchView"/>
     </div>
     <p v-if="authorError" class="album-results" role="status">{{authorError}} <button @click="loadAuthors">重新载入</button></p>
     <p v-if="keyword||yearFilter||authorFilter" class="album-results" role="status">找到 {{memories.total}} 段回忆 <button @click="keyword='';yearFilter='';authorFilter='';submitSearch()">清除筛选</button></p>
@@ -149,24 +166,24 @@ watch(()=>route.query.keyword,value=>{if(typeof value==='string'&&value!==keywor
     </div>
 
     <template v-else-if="memories.items.length">
-      <MemoryWall v-if="view==='grid'"><MemoryCard v-for="item in memories.items" :key="item.id" :memory="item"/></MemoryWall>
-      <div v-else class="album-timeline" aria-label="按月份浏览回忆"><section v-for="group in monthGroups" :key="group.key" class="album-month"><header><span class="album-month-node"></span><h2>{{group.year}} 年 <strong>{{group.month}} 月</strong></h2><span>{{group.items.length}} 段已显示</span></header><div class="album-timeline-cards"><MemoryCard v-for="item in group.items" :key="item.id" :memory="item"/></div></section></div>
+      <GlowCollection v-if="view==='grid'" class="editorial-wall"><MemoryCard v-for="(item,index) in memories.items" :key="item.id" :memory="item" :featured="item.id===featuredId" :data-edition="String((page-1)*desktopPageSize+index+1).padStart(2,'0')" data-reveal :style="{'--item-delay':`${Math.min(index,5)*45}ms`}"/></GlowCollection>
+      <div v-else class="album-timeline" aria-label="按月份浏览回忆"><section v-for="group in monthGroups" :key="group.key" class="album-month" data-reveal><header><span class="album-month-node"></span><h2>{{group.year}} 年 <strong>{{group.month}} 月</strong></h2><span>{{group.items.length}} 段已显示</span></header><div class="album-timeline-cards"><MemoryCard v-for="item in group.items" :key="item.id" :memory="item"/></div></section></div>
     </template>
 
     <div v-else class="rounded-2xl border border-dashed border-night-line-strong bg-night-surface/70 px-6 py-16 text-center">
-      <div class="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-night-accent/10 text-night-accent"><Plus :size="20"/></div>
+      <div class="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-night-accent/10 text-night-accent"><Plus aria-hidden="true" :size="20"/></div>
       <h2 class="mt-4 font-serif text-xl font-bold text-night-ink">从第一段故事开始</h2>
       <p class="mt-2 text-xs text-night-muted">从一件今天发生的小事开始吧。</p><button @click="openComposer" class="sky-primary mt-5 rounded-full bg-night-action px-5 py-3 text-sm font-semibold text-night-action-ink">记录第一段记忆</button>
     </div>
 
     <nav v-if="isDesktop && totalPages > 1" class="flex items-center justify-center gap-2" aria-label="首页分页">
-      <button :disabled="page===1 || memories.loading" @click="goToPage(page-1)" class="grid h-10 w-10 place-items-center rounded-xl border border-night-line bg-night-surface text-night-secondary transition hover:border-night-accent/40 hover:text-night-accent disabled:opacity-35"><ChevronLeft :size="17"/></button>
+      <button aria-label="上一页回忆" :disabled="page===1 || memories.loading" @click="goToPage(page-1)" class="grid h-10 w-10 place-items-center rounded-xl border border-night-line bg-night-surface text-night-secondary transition hover:border-night-accent/40 hover:text-night-accent disabled:opacity-35"><ChevronLeft aria-hidden="true" :size="17"/></button>
       <button v-for="number in totalPages" :key="number" :aria-current="number===page?'page':undefined" @click="goToPage(number)" class="grid h-10 min-w-10 place-items-center rounded-xl px-2 text-xs font-semibold transition" :class="number===page?'album-page-current':'border border-night-line bg-night-surface text-night-ink hover:border-night-accent/40'">{{ number }}</button>
-      <button :disabled="page===totalPages || memories.loading" @click="goToPage(page+1)" class="grid h-10 w-10 place-items-center rounded-xl border border-night-line bg-night-surface text-night-secondary transition hover:border-night-accent/40 hover:text-night-accent disabled:opacity-35"><ChevronRight :size="17"/></button>
+      <button aria-label="下一页回忆" :disabled="page===totalPages || memories.loading" @click="goToPage(page+1)" class="grid h-10 w-10 place-items-center rounded-xl border border-night-line bg-night-surface text-night-secondary transition hover:border-night-accent/40 hover:text-night-accent disabled:opacity-35"><ChevronRight aria-hidden="true" :size="17"/></button>
     </nav>
 
     <div v-if="!isDesktop" ref="loadMoreTrigger" class="flex h-20 items-center justify-center text-xs text-night-muted">
-      <span v-if="loadingMore" class="flex items-center gap-2"><LoaderCircle :size="16" class="animate-spin"/>正在翻出更多记忆</span>
+      <span v-if="loadingMore" class="flex items-center gap-2"><LoaderCircle aria-hidden="true" :size="16" class="animate-spin"/>正在翻出更多记忆</span>
       <button v-else-if="loadMoreError" class="sky-secondary" @click="loadMore().then(()=>{if(!loadMoreError)observeLoadMore()})">加载失败，点击重试</button>
       <span v-else-if="!hasMore && memories.items.length">已经看到全部记忆了</span>
     </div>
@@ -174,13 +191,21 @@ watch(()=>route.query.keyword,value=>{if(typeof value==='string'&&value!==keywor
 </template>
 
 <style scoped>
-.album-page{width:100%;max-width:1856px;margin-inline:auto}.album-page :deep(.sky-page-title-line){display:flex;align-items:center;gap:16px;flex-wrap:wrap}.album-page :deep(.page-title){font-family:Georgia,"Songti SC",serif;font-size:40px;font-weight:600;letter-spacing:.04em}.album-stat{font-size:11px;color:#e2b873;padding:5px 12px;border:1px solid #d3a55c33;border-radius:30px;background:#d6a65e0d;white-space:nowrap}.album-page :deep(.sky-page-header p){font-size:13px;color:#aaa3af}
-.album-toolbar{display:flex;justify-content:space-between;align-items:center;gap:18px;padding:15px 16px;background:#20212b88;border:1px solid #c4b6ca1a;border-radius:15px}.album-filters{display:flex;align-items:center;gap:12px;flex:1;min-width:0;flex-wrap:wrap}.album-search{display:flex;align-items:center;gap:9px;min-width:200px;flex:1;max-width:450px;padding:0 11px;background:#171a2580;border:1px solid #c7bac721;border-radius:10px;color:#9993a1;height:38px}.album-search:focus-within{border-color:#d3af7459}.album-search input{background:none!important;border:0!important;box-shadow:none!important;outline:none!important;min-width:0;width:100%;padding:7px 0!important;font-size:12px!important}.album-search button{display:grid;place-items:center;min-width:28px;min-height:34px}.album-filter{width:118px}.album-filter :deep(.u031-lab){position:absolute;width:1px;height:1px;clip-path:inset(50%);overflow:hidden}.album-filter :deep(.u031-btn){height:38px;min-height:38px;background:#171a2580;box-shadow:inset 0 0 0 1px #c7bac721}.album-filter :deep(.u031-v b){font-size:12px}.album-view-switch{flex-shrink:0}.album-view-switch :deep(.u039-tab){height:32px;font-size:12px;padding-inline:16px}.album-view-switch :deep(.u039-pill){border:1px solid #c9974b40}
-.album-page-current{background:#e2b873;color:#211c17;font-weight:650;border:1px solid #efd09e}.album-page-current:hover{background:#eac58c;color:#211c17}
-.album-filter-notice,.album-results{font-size:12px;color:#b6a48e}.album-filter-notice button,.album-results button{margin-left:10px;color:#dfbd90;min-height:32px}
-.memory-grid{display:grid;gap:24px;grid-template-columns:repeat(auto-fill,minmax(min(100%,265px),1fr));align-items:stretch}
-.album-timeline{position:relative;border-left:1px solid #d8b7822b;margin-left:12px;padding-left:30px}.album-month{position:relative;margin-bottom:36px}.album-month>header{display:flex;gap:16px;align-items:center;margin-bottom:20px}.album-month h2{font-size:13px;color:#a49ba9}.album-month h2 strong{font-size:22px;font-weight:500;color:#eee3d2;margin-left:10px}.album-month>header>span:last-child{font-size:11px;color:#9b91a1}.album-month-node{position:absolute;left:-35px;width:9px;height:9px;border-radius:50%;background:#d6b27c;box-shadow:0 0 0 5px #d5b8850c}.album-timeline-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,310px),1fr));gap:24px;align-items:stretch}
-@media(min-width:1280px){.album-page{padding-inline:32px}}
-@media(max-width:1000px){.album-toolbar{flex-wrap:wrap}.album-view-switch{margin-left:auto}.album-filters{flex-basis:100%}.album-search{max-width:none}}
-@media(max-width:767px){.album-page :deep(.page-title){font-size:30px}.album-stat{font-size:10px}.album-page :deep(.sky-page-header){align-items:flex-start;flex-wrap:wrap}.album-toolbar{padding:12px;gap:12px}.album-search{flex-basis:100%;min-width:0}.album-filter{flex:1;min-width:0}.album-view-switch{width:100%}.album-timeline{margin-left:5px;padding-left:19px}.album-month-node{left:-24px}.album-timeline-cards{gap:18px}}
+.album-page{width:100%;max-width:1480px;margin:auto;padding-bottom:35px}
+.memory-hero{display:grid;grid-template-columns:1fr 1fr;align-items:center;min-height:510px;gap:30px;position:relative;margin-top:-20px;border-bottom:1px solid #e2cead21;padding-bottom:24px}
+.memory-hero-copy{position:relative;z-index:1;padding:38px 0 22px;min-width:0}
+.observatory-kicker{display:flex;align-items:center;gap:10px;color:#c2b8a8;font-size:9px;letter-spacing:2.4px}.observatory-kicker>span{width:5px;height:5px;border-radius:50%;background:#e9c89d;box-shadow:0 0 12px #e9c89d88}.observatory-kicker i{font-style:normal;font-size:10px;margin-left:12px;color:#a0a8b9;letter-spacing:1px}
+.memory-hero h1{font:400 clamp(34px,3.1vw,58px)/1.6 'Songti SC','STSong','SimSun',serif;letter-spacing:.025em;margin:26px 0 18px;color:#eee2d0;text-wrap:balance}.memory-hero h1 em{font-style:normal;background:linear-gradient(110deg,#ead6b4,#b6c5db);background-clip:text;-webkit-background-clip:text;color:transparent}
+.memory-hero-description{font-size:13px;line-height:2.1;color:#b2b5c1;letter-spacing:1px}.memory-hero-action{height:112px;margin-left:-25px;display:flex;align-items:center;overflow:visible}.memory-hero-action>.u002{margin-block:-44px}
+.memory-hero-coordinates{display:flex;align-items:center;gap:26px;font-size:10px;color:#989faf;letter-spacing:1px}.memory-hero-coordinates b{font-family:Georgia,serif;font-weight:400;font-size:22px;color:#cfbaa0;letter-spacing:0;margin-right:6px}.coordinate-line{height:1px;background:linear-gradient(90deg,#dcc09555,transparent);flex:1;max-width:100px}
+.memory-hero-exhibit{position:relative;height:510px;min-width:0;isolation:isolate}.memory-hero-exhibit>.orbital-scene{position:absolute;inset:0;width:100%;height:100%;z-index:0}.memory-featured-orbit{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:18px;pointer-events:none}.memory-featured-orbit>.spotlight-story{pointer-events:auto;transform:rotate(3deg);animation:memory-card-arrival 1.25s var(--ux-ease) both}.exhibit-coordinate{font-size:9px;letter-spacing:2px;color:#b4ac9f}.exhibit-annotation{position:absolute;font-size:8px;letter-spacing:2px;color:#9197a8;pointer-events:none}.annotation-top{left:28px;top:10px}.annotation-side{right:-4px;top:50%;writing-mode:vertical-rl}.memory-exhibit-empty{position:absolute;inset:0;display:grid;place-content:center;text-align:center;color:#d9c5a7}.memory-exhibit-empty>span{font-size:50px;filter:drop-shadow(0 0 20px #eec59355)}.memory-exhibit-empty>p{font:24px/1.8 'Songti SC',serif;margin-top:20px}
+.album-chapter{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:6px 0;margin-top:27px!important}.album-chapter>div{display:flex;align-items:center;gap:19px}.chapter-number{font:italic 15px Georgia,serif;color:#b5a185}.album-chapter h2{font:400 25px/1.5 'Songti SC',serif;letter-spacing:2px;color:#e4d8c6}.album-chapter h2 small{font:8px sans-serif;letter-spacing:2px;color:#9197a8;margin-left:17px}.album-chapter>span{font-size:10px;color:#9fa6b5}.album-chapter i{font-style:normal;padding:0 8px;color:#d0b58b}
+.album-toolbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;padding:15px 0 21px;border-bottom:1px solid #c7c4d820;margin-top:12px!important}.album-filters{display:flex;flex:1;align-items:center;gap:12px;min-width:0;flex-wrap:wrap}.album-search{display:flex;align-items:center;gap:9px;max-width:390px;min-width:200px;flex:1;height:48px;border:1px solid #bdc3d626;border-radius:14px;padding:0 12px;background:#1c263580;color:#a3afc2;transition:border-color .2s}.album-search:focus-within{border-color:#dec29b88}.album-search input{width:100%;min-width:0;background:transparent!important;border:0;outline:none;font-size:13px!important;box-shadow:none;padding:10px 0}.album-search button{display:grid;place-items:center;min-height:36px;min-width:30px;border-radius:50%}.album-search button:hover{color:#edd1a9;background:#e1c39812}.album-filter{width:140px}.album-filter :deep(.u031-btn){border-radius:13px;background:#1c263580;height:48px}.album-view-switch{flex-shrink:0}.album-results{font-size:12px;color:#c8c3bb;margin-top:15px!important}.album-results button{margin-left:14px;min-height:36px;color:#e6c69b;border-bottom:1px solid #e6c69b33}
+.editorial-wall{margin-top:25px!important;overflow:hidden}.editorial-wall :deep(.memory-post){min-height:310px}.editorial-wall :deep(.memory-post.is-featured){grid-column:span 2}.editorial-wall :deep(.is-featured .memory-media-frame){aspect-ratio:2.4}.editorial-wall :deep(.memory-post-copy){padding:24px}.editorial-wall :deep(.memory-card-header){display:block}.editorial-wall :deep(.memory-author-name){display:block;margin-top:8px;max-width:100%;font-size:10px;color:#c1b19d}.editorial-wall :deep(.memory-story-link h2){white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}.editorial-wall :deep(.memory-excerpt){font-size:12px;line-height:1.95}.editorial-wall :deep(.is-note .memory-note-top){justify-content:flex-start;margin-bottom:25px}.editorial-wall :deep(.is-note .memory-note-top time){background:none;border:0;letter-spacing:2px;padding:0;color:#a7aabd}.editorial-wall :deep(.is-note .memory-card-surface){position:relative}.editorial-wall :deep(.memory-post.is-note::after){content:attr(data-edition);position:absolute;right:20px;bottom:55px;font:italic 100px Georgia,serif;color:#dcc7ad06;pointer-events:none}.album-page-current{background:#d9bf971c;border:1px solid #d9bf974d;color:#e5cba6}
+.album-timeline{margin-top:30px!important;padding-left:27px;border-left:1px solid #d9bf9733}.album-month{position:relative;margin-bottom:36px}.album-month>header{display:flex;align-items:center;gap:14px;margin-bottom:22px}.album-month h2{font-size:16px;color:#c1c3cc}.album-month h2 strong{font:400 25px Georgia,serif;color:#e8c99f;padding-left:8px}.album-month>header>span:last-child{margin-left:auto;font-size:11px;color:#969ead}.album-month-node{position:absolute;width:7px;height:7px;border-radius:50%;background:#d7bb8e;box-shadow:0 0 13px #d7bb8e66;left:-31px;top:13px}.album-timeline-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px}.album-timeline-cards :deep(.memory-post){padding:1.5px;border-radius:18px;background:#c8bfd52b}.album-timeline-cards :deep(.u228-in){border-radius:16.5px;background:#172131}
+@keyframes memory-card-arrival{from{opacity:0;transform:translateY(24px) rotate(7deg)}to{opacity:1;transform:rotate(3deg)}}
+@media(max-width:1100px){.memory-hero{grid-template-columns:1fr 1fr;gap:0;min-height:480px}.memory-hero h1{font-size:36px}.memory-hero-exhibit{height:480px}.memory-featured-orbit{transform:scale(.9)}.observatory-kicker{font-size:8px;letter-spacing:1.5px}.observatory-kicker i{display:none}.album-timeline-cards{grid-template-columns:repeat(2,minmax(0,1fr))}.album-toolbar{gap:16px}.album-filter{width:125px}}
+@media(max-width:767px){.memory-hero{grid-template-columns:minmax(0,1fr);padding-top:8px;min-height:0;margin-top:0}.memory-hero-copy{padding:20px 0 15px}.memory-hero h1{font-size:clamp(32px,6vw,43px);margin-top:22px}.memory-hero-exhibit{display:none}.memory-hero-description{font-size:12px}.memory-hero-action{margin-left:-15px;height:110px}.memory-hero-coordinates{gap:20px;margin-top:4px}.album-chapter{margin-top:24px!important;flex-wrap:wrap;gap:10px}.album-chapter h2{font-size:23px}.album-chapter h2 small{display:none}.album-chapter>span{font-size:10px}.album-toolbar{margin-top:8px!important;padding-bottom:20px}.album-filters{width:100%;flex:none;gap:10px}.album-search{max-width:none;min-width:100%;height:48px}.album-filter{flex:1;width:auto}.album-view-switch{margin-left:auto}.album-timeline-cards{grid-template-columns:minmax(0,1fr)}.album-month h2{font-size:14px}.album-month h2 strong{font-size:21px}}
+@media(max-width:700px){.editorial-wall :deep(.memory-post.is-featured){grid-column:auto}.editorial-wall :deep(.is-featured .memory-media-frame){aspect-ratio:16/9}}
+@media(prefers-reduced-motion:reduce){.memory-featured-orbit>.spotlight-story{animation:none}.album-search{transition:none}}
 </style>
